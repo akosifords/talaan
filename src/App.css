@@ -144,6 +144,21 @@ nav button {
   cursor: pointer;
 }
 
+.auth-chip {
+  min-height: 36px;
+  flex: 0 0 auto;
+  padding: 0 14px;
+  border: 1px solid rgba(245, 251, 239, 0.72);
+  border-radius: 999px;
+  background: var(--green-hot);
+  color: var(--black);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
 .access-link {
   display: none;
 }
@@ -321,6 +336,168 @@ nav button {
     linear-gradient(rgba(37, 43, 39, 0.07) 1px, transparent 1px),
     var(--green);
   background-size: 46px 46px;
+}
+
+.auth-page {
+  min-height: calc(100vh - 82px);
+  display: grid;
+  place-items: center;
+  padding: clamp(34px, 5vw, 78px);
+  background:
+    linear-gradient(90deg, rgba(37, 43, 39, 0.07) 1px, transparent 1px),
+    linear-gradient(rgba(37, 43, 39, 0.07) 1px, transparent 1px),
+    var(--green);
+  background-size: 46px 46px;
+}
+
+.auth-panel {
+  width: min(1080px, 100%);
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
+  gap: clamp(28px, 5vw, 64px);
+  align-items: center;
+}
+
+.auth-copy {
+  display: grid;
+  align-content: start;
+}
+
+.auth-kicker {
+  width: fit-content;
+  margin-bottom: 18px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: var(--black);
+  color: var(--green-hot);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.auth-copy h1 {
+  max-width: 720px;
+  font-size: clamp(58px, 8vw, 126px);
+  text-transform: none;
+}
+
+.auth-card {
+  position: relative;
+  overflow: hidden;
+  padding: clamp(22px, 3vw, 34px);
+  display: grid;
+  gap: 16px;
+  border: 2px solid rgba(37, 43, 39, 0.5);
+  border-radius: 24px;
+  background: rgba(245, 251, 239, 0.48);
+  box-shadow:
+    inset 0 1px 0 rgba(245, 251, 239, 0.45),
+    0 16px 38px rgba(37, 43, 39, 0.12);
+}
+
+.google-btn {
+  min-height: 54px;
+  padding: 0 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  border: 2px solid var(--black);
+  border-radius: 999px;
+  background: var(--black);
+  color: var(--green-hot);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.google-btn:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
+.google-btn span {
+  width: 24px;
+  height: 24px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--green-hot);
+  color: var(--black);
+  font-family: "Space Grotesk", system-ui, sans-serif;
+  font-weight: 700;
+}
+
+.auth-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.auth-error {
+  padding: 12px 14px;
+  border: 1px solid rgba(37, 43, 39, 0.24);
+  border-radius: 14px;
+  background: rgba(37, 43, 39, 0.08);
+  color: var(--black) !important;
+}
+
+.profile-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.profile-row img,
+.profile-fallback {
+  width: 54px;
+  height: 54px;
+  flex: 0 0 auto;
+  border: 2px solid var(--black);
+  border-radius: 50%;
+}
+
+.profile-row img {
+  object-fit: cover;
+}
+
+.profile-fallback {
+  display: inline-grid;
+  place-items: center;
+  background: var(--black);
+  color: var(--green-hot);
+  font-family: "Space Grotesk", system-ui, sans-serif;
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.profile-row strong,
+.profile-row small {
+  display: block;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.profile-row strong {
+  font-family: "Space Grotesk", system-ui, sans-serif;
+  font-size: 24px;
+  line-height: 1.05;
+}
+
+.profile-row small {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.auth-action {
+  width: 100%;
+  min-height: 48px;
 }
 
 .pricing-heading {
@@ -1332,6 +1509,15 @@ h1 {
     padding: 34px;
   }
 
+  .auth-page {
+    min-height: auto;
+    padding: 34px;
+  }
+
+  .auth-panel {
+    grid-template-columns: 1fr;
+  }
+
   .pricing-grid {
     grid-template-columns: 1fr;
   }
@@ -1412,6 +1598,23 @@ h1 {
 
   .contact-page {
     padding: 28px 10px 42px;
+  }
+
+  .auth-page {
+    padding: 28px 10px 42px;
+  }
+
+  .auth-card {
+    border-radius: 18px;
+  }
+
+  .auth-copy {
+    text-align: center;
+    justify-items: center;
+  }
+
+  .auth-copy h1 {
+    font-size: clamp(48px, 15vw, 78px);
   }
 
   .pricing-heading {
