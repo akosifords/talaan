@@ -79,6 +79,30 @@ const commonQuestions = [
   },
 ];
 
+const otherWaysToConnect = [
+  {
+    id: "01",
+    title: "Documentation",
+    description: "Check our guides and tutorials.",
+    href: "mailto:hello@talaan.app?subject=Documentation",
+    cta: "View Docs",
+  },
+  {
+    id: "02",
+    title: "Community",
+    description: "Join our updates and product discussions.",
+    href: "mailto:hello@talaan.app?subject=Community",
+    cta: "Join Community",
+  },
+  {
+    id: "03",
+    title: "FAQ",
+    description: "Get quick answers about Talaan.",
+    href: "mailto:hello@talaan.app?subject=FAQ",
+    cta: "Read FAQ",
+  },
+];
+
 function CountUpScore({ value }) {
   const [score, setScore] = useState(0);
 
@@ -149,7 +173,13 @@ function App() {
                 type="button"
                 onClick={() => {
                   setPage(
-                    item === "Team" ? "team" : item === "Pricing" ? "pricing" : "home",
+                    item === "Team"
+                      ? "team"
+                      : item === "Pricing"
+                        ? "pricing"
+                        : item === "Contact"
+                          ? "contact"
+                          : "home",
                   );
                   setShowPreview(false);
                 }}
@@ -158,16 +188,11 @@ function App() {
               </button>
             ))}
           </nav>
-
-          <a className="access-link" href="#signup">
-            Get access
-          </a>
         </header>
 
         {page === "pricing" ? (
           <section className="pricing-page" aria-label="Talaan pricing">
             <div className="pricing-heading">
-              <span className="team-kicker">Pricing</span>
               <h1>Free. Forever.</h1>
               <p className="lede">
                 Financial clarity should not cost you. Talaan is free for everyone, with
@@ -225,6 +250,68 @@ function App() {
               </div>
             </section>
           </section>
+        ) : page === "contact" ? (
+          <section className="contact-page" aria-label="Contact Talaan">
+            <div className="contact-heading">
+              <h1>Let's Talk</h1>
+              <p className="lede">
+                Have questions or feedback? We would love to hear from you.
+              </p>
+            </div>
+
+            <div className="contact-grid">
+              <section className="contact-form-card" aria-label="Send a message">
+                <form className="contact-form" onSubmit={(event) => event.preventDefault()}>
+                  <label htmlFor="contact-name">Name *</label>
+                  <input id="contact-name" type="text" placeholder="Your name" />
+
+                  <label htmlFor="contact-email">Email *</label>
+                  <input id="contact-email" type="email" placeholder="you@email.com" />
+
+                  <label htmlFor="contact-subject">Subject *</label>
+                  <input id="contact-subject" type="text" placeholder="What's this about?" />
+
+                  <label htmlFor="contact-category">Category</label>
+                  <select id="contact-category" defaultValue="General Inquiry">
+                    <option>General Inquiry</option>
+                    <option>Support</option>
+                    <option>Feedback</option>
+                    <option>Partnership</option>
+                  </select>
+
+                  <label htmlFor="contact-message">Message *</label>
+                  <textarea
+                    id="contact-message"
+                    rows={6}
+                    placeholder="Tell us what's on your mind..."
+                  />
+
+                  <button className="primary-btn contact-submit" type="submit">
+                    Send Message
+                  </button>
+                  <p className="contact-policy">
+                    By submitting this form, you agree to our privacy policy.
+                  </p>
+                </form>
+              </section>
+            </div>
+
+            <section className="contact-other" aria-label="Other ways to connect">
+              <h2>Other Ways to Connect</h2>
+              <div className="contact-other-list">
+                {otherWaysToConnect.map((item) => (
+                  <article className="contact-other-row" key={item.title}>
+                    <span>[{item.id}]</span>
+                    <div>
+                      <h3>{item.title}</h3>
+                      <p>{item.description}</p>
+                      <a href={item.href}>{item.cta}</a>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
+          </section>
         ) : page === "team" ? (
           <section className="team-page" aria-label="Talaan team">
             <div className="team-photo-wrap">
@@ -236,12 +323,11 @@ function App() {
             </div>
 
             <div className="team-copy">
-              <span className="team-kicker">Creator / Developer</span>
               <h1>Mark Anthony Fordan</h1>
               <p className="lede">
-                Building Talaan as a practical budgeting companion for people
-                who want clearer cashflow, cleaner spending habits, and fewer
-                money surprises.
+                Creator and developer of Talaan, building a practical budgeting
+                companion for people who want clearer cashflow, cleaner spending
+                habits, and fewer money surprises.
               </p>
 
               <div className="team-links" aria-label="Mark Fordan profile links">
