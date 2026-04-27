@@ -241,6 +241,8 @@ nav button {
   border-radius: 28px;
   background: var(--soft);
   box-shadow: 0 18px 50px rgba(37, 43, 39, 0.18);
+  opacity: 0;
+  animation: hero-reveal 720ms cubic-bezier(0.16, 1, 0.3, 1) 140ms both;
 }
 
 .team-photo {
@@ -255,6 +257,8 @@ nav button {
 
 .team-copy {
   max-width: 820px;
+  opacity: 0;
+  animation: hero-reveal 720ms cubic-bezier(0.16, 1, 0.3, 1) 260ms both;
 }
 
 .team-copy h1 {
@@ -290,6 +294,8 @@ nav button {
   flex-wrap: wrap;
   gap: 12px;
   margin-top: 34px;
+  opacity: 0;
+  animation: hero-reveal 720ms cubic-bezier(0.16, 1, 0.3, 1) 420ms both;
 }
 
 .team-links a {
@@ -303,6 +309,11 @@ nav button {
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+  transition: transform 180ms ease;
+}
+
+.team-links a:hover {
+  transform: translateY(-2px);
 }
 
 .team-links a:first-child {
@@ -328,6 +339,8 @@ nav button {
   max-width: 900px;
   justify-self: center;
   text-align: center;
+  opacity: 0;
+  animation: hero-reveal 720ms cubic-bezier(0.16, 1, 0.3, 1) 120ms both;
 }
 
 .pricing-heading h1 {
@@ -349,6 +362,8 @@ nav button {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 24px;
+  opacity: 0;
+  animation: hero-reveal 720ms cubic-bezier(0.16, 1, 0.3, 1) 300ms both;
 }
 
 .pricing-card {
@@ -365,6 +380,16 @@ nav button {
   box-shadow:
     inset 0 1px 0 rgba(245, 251, 239, 0.45),
     0 16px 38px rgba(37, 43, 39, 0.12);
+  transition:
+    box-shadow 180ms ease,
+    transform 180ms ease;
+}
+
+.pricing-card:hover {
+  box-shadow:
+    inset 0 1px 0 rgba(245, 251, 239, 0.45),
+    0 20px 46px rgba(37, 43, 39, 0.16);
+  transform: translateY(-4px);
 }
 
 .pricing-card::before {
@@ -526,6 +551,8 @@ nav button {
   justify-self: center;
   display: grid;
   gap: 18px;
+  opacity: 0;
+  animation: hero-reveal 720ms cubic-bezier(0.16, 1, 0.3, 1) 480ms both;
 }
 
 .pricing-faq h2 {
@@ -552,6 +579,14 @@ nav button {
   text-align: left;
   padding: 24px 0;
   border-bottom: 1px solid var(--line);
+  transition:
+    background-color 180ms ease,
+    transform 180ms ease;
+}
+
+.pricing-faq-row:hover {
+  background: rgba(245, 251, 239, 0.2);
+  transform: translateX(6px);
 }
 
 .pricing-faq-row span {
@@ -599,6 +634,8 @@ nav button {
   max-width: 900px;
   justify-self: center;
   text-align: center;
+  opacity: 0;
+  animation: hero-reveal 720ms cubic-bezier(0.16, 1, 0.3, 1) 120ms both;
 }
 
 .contact-heading h1 {
@@ -620,6 +657,8 @@ nav button {
   display: grid;
   grid-template-columns: 1fr;
   gap: 24px;
+  opacity: 0;
+  animation: hero-reveal 720ms cubic-bezier(0.16, 1, 0.3, 1) 300ms both;
 }
 
 .contact-card {
@@ -812,6 +851,8 @@ nav button {
   justify-self: center;
   display: grid;
   gap: 18px;
+  opacity: 0;
+  animation: hero-reveal 720ms cubic-bezier(0.16, 1, 0.3, 1) 480ms both;
 }
 
 .contact-other h2 {
@@ -838,6 +879,14 @@ nav button {
   text-align: left;
   padding: 24px 0;
   border-bottom: 1px solid var(--line);
+  transition:
+    background-color 180ms ease,
+    transform 180ms ease;
+}
+
+.contact-other-row:hover {
+  background: rgba(245, 251, 239, 0.2);
+  transform: translateX(6px);
 }
 
 .contact-other-row span {
@@ -921,6 +970,30 @@ nav button {
   display: grid;
   justify-items: center;
   margin-top: clamp(34px, 8vh, 86px);
+}
+
+.intro-content h1,
+.intro-content .lede,
+.scan-list,
+.cta-row {
+  opacity: 0;
+  animation: hero-reveal 720ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.intro-content h1 {
+  animation-delay: 120ms;
+}
+
+.intro-content .lede {
+  animation-delay: 260ms;
+}
+
+.scan-list {
+  animation-delay: 420ms;
+}
+
+.cta-row {
+  animation-delay: 620ms;
 }
 
 .back-btn {
@@ -1209,6 +1282,18 @@ nav button {
   }
 }
 
+@keyframes hero-reveal {
+  0% {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -1257,6 +1342,14 @@ h1 {
   text-align: left;
   min-height: 48px;
   border-bottom: 1px solid var(--line);
+  transition:
+    background-color 180ms ease,
+    transform 180ms ease;
+}
+
+.scan-list div:hover {
+  background: rgba(245, 251, 239, 0.24);
+  transform: translateX(6px);
 }
 
 .scan-list span {
@@ -1298,6 +1391,16 @@ h1 {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   cursor: pointer;
+  transition:
+    background-color 180ms ease,
+    border-color 180ms ease,
+    color 180ms ease,
+    transform 180ms ease;
+}
+
+.primary-btn:hover,
+.secondary-btn:hover {
+  transform: translateY(-2px);
 }
 
 .primary-btn {
