@@ -1,4 +1,11 @@
 import { useEffect, useState } from "react";
+import {
+  GoogleAuthProvider,
+  onAuthStateChanged,
+  signInWithPopup,
+  signOut,
+} from "firebase/auth";
+import { auth, firebaseConfigured } from "./firebase";
 
 const scanItems = [
   {
@@ -15,14 +22,14 @@ const scanItems = [
   },
 ];
 
-const navItems = ["Features", "Pricing", "Team", "Contact", "FAQ"];
+const navItems = ["Features", "Pricing", "Team", "Contact"];
 
 const pricingPlans = [
   {
     name: "Free",
     price: "$0",
     note: "No credit card required",
-    cta: "Join Waitlist",
+    cta: "Sign up with Google",
     features: [
       "Real-time transaction scanning",
       "Subscription detection",
@@ -148,6 +155,54 @@ function CountUpScore({ value }) {
 function App() {
   const [showPreview, setShowPreview] = useState(false);
   const [page, setPage] = useState("home");
+  const [user, setUser] = useState(null);
+  const [authLoading, setAuthLoading] = useState(Boolean(auth));
+  const [authError, setAuthError] = useState("");
+
+  useEffect(() => {
+    if (!auth) {
+      setAuthLoading(false);
+      return undefined;
+    }
+
+    return onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      setAuthLoading(false);
+    });
+  }, []);
+
+  const openAuth = () => {
+    setPage("auth");
+    setShowPreview(false);
+    setAuthError("");
+  };
+
+  const handleGoogleAuth = async () => {
+    setAuthError("");
+
+    if (!firebaseConfigured || !auth) {
+      setAuthError("Firebase is not configured yet. Add the Vite env vars before deploying.");
+      return;
+    }
+
+    try {
+      const provider = new GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: "select_account" });
+      await signInWithPopup(auth, provider);
+      setPage("auth");
+    } catch (error) {
+      setAuthError(error.message || "Google sign-in failed. Please try again.");
+    }
+  };
+
+  const handleSignOut = async () => {
+    if (!auth) {
+      return;
+    }
+
+    await signOut(auth);
+    setPage("home");
+  };
 
   return (
     <main className="shell">
@@ -188,9 +243,86 @@ function App() {
               </button>
             ))}
           </nav>
+
+          {user ? (
+            <button className="auth-chip" type="button" onClick={openAuth}>
+              {user.displayName?.split(" ")[0] || "Account"}
+            </button>
+          ) : (
+            <button className="auth-chip" type="button" onClick={openAuth}>
+              Login / Sign up
+            </button>
+          )}
         </header>
 
-        {page === "pricing" ? (
+        {page === "auth" ? (
+          <section className="auth-page" aria-label="Talaan sign in">
+            <div className="auth-panel">
+              <div className="auth-copy">
+                <span className="auth-kicker">Google auth</span>
+                <h1>{user ? "You're in." : "Start with Google."}</h1>
+                <p className="lede">
+                  Use one secure Google sign-in for Talaan. The app stays simple for
+                  Vercel hosting while Firebase handles identity.
+                </p>
+              </div>
+
+              <div className="auth-card">
+                {user ? (
+                  <>
+                    <div className="profile-row">
+                      {user.photoURL ? (
+                        <img src={user.photoURL} alt="" />
+                      ) : (
+                        <span className="profile-fallback">
+                          {(user.displayName || user.email || "T").charAt(0)}
+                        </span>
+                      )}
+                      <div>
+                        <strong>{user.displayName || "Talaan user"}</strong>
+                        <small>{user.email}</small>
+                      </div>
+                    </div>
+                    <button className="primary-btn auth-action" type="button">
+                      Open dashboard
+                    </button>
+                    <button
+                      className="secondary-btn auth-action"
+                      type="button"
+                      onClick={handleSignOut}
+                    >
+                      Sign out
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      className="google-btn"
+                      type="button"
+                      onClick={handleGoogleAuth}
+                      disabled={authLoading}
+                    >
+                      <span aria-hidden="true">G</span>
+                      {authLoading ? "Checking session..." : "Continue with Google"}
+                    </button>
+                    <p>
+                      No password flow for now. Google is the only sign-in method while
+                      Talaan is early.
+                    </p>
+                  </>
+                )}
+
+                {authError && <p className="auth-error">{authError}</p>}
+                {!firebaseConfigured && (
+                  <p className="auth-error">
+                    Firebase env vars are missing locally. Add them in `.env.local` and
+                    in Vercel project settings.
+                  </p>
+                )}
+              </div>
+            </div>
+          </section>
+        ) : page === "pricing" ? (
           <section className="pricing-page" aria-label="Talaan pricing">
             <div className="pricing-heading">
               <h1>Free. Forever.</h1>
@@ -227,7 +359,11 @@ function App() {
 
                   <a
                     className={`${plan.featured ? "primary-btn" : "secondary-btn"} pricing-card-btn`}
-                    href="mailto:hello@talaan.app"
+                    href={plan.featured ? "mailto:hello@talaan.app?subject=Supporter" : undefined}
+                    onClick={plan.featured ? undefined : (event) => {
+                      event.preventDefault();
+                      handleGoogleAuth();
+                    }}
                   >
                     {plan.cta}
                   </a>
@@ -368,13 +504,17 @@ function App() {
                 <button
                   className="primary-btn"
                   type="button"
+                  onClick={handleGoogleAuth}
+                >
+                  Sign up with Google
+                </button>
+                <button
+                  className="secondary-btn"
+                  type="button"
                   onClick={() => setShowPreview(true)}
                 >
                   Preview
                 </button>
-                <a className="secondary-btn" href="mailto:hello@talaan.app">
-                  Join waitlist
-                </a>
               </div>
             </div>
           </section>
