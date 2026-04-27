@@ -17,6 +17,68 @@ const scanItems = [
 
 const navItems = ["Features", "Pricing", "Team", "Contact", "FAQ"];
 
+const pricingPlans = [
+  {
+    name: "Free",
+    price: "$0",
+    note: "No credit card required",
+    cta: "Join Waitlist",
+    features: [
+      "Real-time transaction scanning",
+      "Subscription detection",
+      "Cashflow forecasting",
+      "Budget guardrails",
+      "Goal tracking",
+      "Financial health score",
+      "All future features",
+    ],
+  },
+  {
+    name: "Supporter",
+    price: "Pay What You Want",
+    textPrice: true,
+    note: "Optional donation",
+    cta: "Donate",
+    features: [
+      "Everything in Free",
+      "Support indie development",
+      "Help us stay ad-free",
+      "Supporter badge (optional)",
+      "Early feature previews",
+      "Priority support",
+      "Warm fuzzy feelings",
+    ],
+    featured: true,
+  },
+];
+
+const commonQuestions = [
+  {
+    id: "01",
+    question: "Why is Talaan free?",
+    answer:
+      "Everyone deserves access to financial clarity, regardless of income. Money management tools should not be a luxury.",
+  },
+  {
+    id: "02",
+    question: "Will it stay free forever?",
+    answer:
+      "Yes. Core features will always be free. Talaan is funded by optional supporter donations from people who believe in the mission.",
+  },
+  {
+    id: "03",
+    question: "What happens with donations?",
+    answer:
+      "Donations go directly to development, hosting, and keeping Talaan running. No ads, no data selling, no hidden costs.",
+  },
+  {
+    id: "04",
+    question: "Do I get more features if I donate?",
+    answer:
+      "No. Donations are purely optional support. Everyone gets the same powerful core features whether they donate or not.",
+  },
+];
+
 function CountUpScore({ value }) {
   const [score, setScore] = useState(0);
 
@@ -86,7 +148,9 @@ function App() {
                 key={item}
                 type="button"
                 onClick={() => {
-                  setPage(item === "Team" ? "team" : "home");
+                  setPage(
+                    item === "Team" ? "team" : item === "Pricing" ? "pricing" : "home",
+                  );
                   setShowPreview(false);
                 }}
               >
@@ -100,7 +164,68 @@ function App() {
           </a>
         </header>
 
-        {page === "team" ? (
+        {page === "pricing" ? (
+          <section className="pricing-page" aria-label="Talaan pricing">
+            <div className="pricing-heading">
+              <span className="team-kicker">Pricing</span>
+              <h1>Free. Forever.</h1>
+              <p className="lede">
+                Financial clarity should not cost you. Talaan is free for everyone, with
+                optional support for those who want to help us grow.
+              </p>
+            </div>
+
+            <div className="pricing-grid">
+              {pricingPlans.map((plan) => (
+                <article
+                  className={`pricing-card${plan.featured ? " pricing-card-featured" : ""}`}
+                  key={plan.name}
+                >
+                  <div>
+                    <span className="plan-label">{plan.name}</span>
+                    <div className="plan-price">
+                      <strong className={plan.textPrice ? "plan-price-text" : undefined}>
+                        {plan.price}
+                      </strong>
+                      {plan.cadence && <small>{plan.cadence}</small>}
+                    </div>
+                    <p className={`plan-note${plan.featured ? " plan-note-featured" : ""}`}>
+                      {plan.note}
+                    </p>
+                  </div>
+
+                  <ul>
+                    {plan.features.map((feature) => (
+                      <li key={feature}>{feature}</li>
+                    ))}
+                  </ul>
+
+                  <a
+                    className={`${plan.featured ? "primary-btn" : "secondary-btn"} pricing-card-btn`}
+                    href="mailto:hello@talaan.app"
+                  >
+                    {plan.cta}
+                  </a>
+                </article>
+              ))}
+            </div>
+
+            <section className="pricing-faq" aria-label="Common questions">
+              <h2>Common Questions</h2>
+              <div className="pricing-faq-list">
+                {commonQuestions.map((item) => (
+                  <article className="pricing-faq-row" key={item.question}>
+                    <span>[{item.id}]</span>
+                    <div>
+                      <h3>{item.question}</h3>
+                      <p>{item.answer}</p>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
+          </section>
+        ) : page === "team" ? (
           <section className="team-page" aria-label="Talaan team">
             <div className="team-photo-wrap">
               <img
