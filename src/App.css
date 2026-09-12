@@ -611,13 +611,13 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
 .navigation-icon{display:block;flex-shrink:0}
 @media(max-width:699px){
 .topbar nav,.ledger-dashboard .dashboard-stage-control{position:fixed;top:auto;left:16px;right:16px;bottom:calc(12px + env(safe-area-inset-bottom));width:auto;max-width:440px;margin:0 auto;padding:6px;gap:4px;border:1px solid #fff9ee;border-radius:18px;background:#f7f1e8;box-shadow:0 6px 24px #25231f20;transform:none}
-.screen{padding-bottom:calc(92px + env(safe-area-inset-bottom))}
-.dashboard-page{padding-bottom:calc(116px + env(safe-area-inset-bottom))}
+.screen{padding-bottom:0}
+.dashboard-page{padding-bottom:0}
 .topbar nav button,.ledger-dashboard .stage-dot{display:flex;align-items:center;justify-content:center;gap:5px;border:0;min-height:52px;padding:7px 4px;border-radius:12px;background:transparent;color:#766b5b;font-size:12px;font-weight:500;box-shadow:none;transform:none}
 .topbar nav button{flex-direction:column}
 .ledger-dashboard .stage-dot{flex-direction:row;gap:9px;font-size:14px}
 .topbar nav button[aria-current=page],.ledger-dashboard .stage-dot[aria-current=page]{background:#ead9c9;color:#9e3523;box-shadow:none}
-.shell{padding-bottom:calc(102px + env(safe-area-inset-bottom))}
+.shell{padding-bottom:calc(92px + env(safe-area-inset-bottom))}
 }
 @media(min-width:700px){
 .topbar nav button{display:flex;align-items:center;gap:8px}
