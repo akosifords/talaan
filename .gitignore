@@ -8,4 +8,9 @@ yarn-error.log*
 pnpm-debug.log*
 .env
 .env.local
+functions/.env*
+.firebase
+firebase-debug.log*
+firestore-debug.log*
+ui-debug.log*
 .DS_Store

@@ -1,7 +1,7 @@
 import useRoute from "./useRoute";
 import NavIcon from "./NavIcon";
 import Dashboard from "./Dashboard";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   GoogleAuthProvider,
   onAuthStateChanged,
@@ -9,6 +9,7 @@ import {
   signOut,
 } from "firebase/auth";
 import { auth, firebaseConfigured } from "./firebase";
+import { callWorkspaceFunction } from "./data/repositories";
 
 const scanItems = [
   "Track bills and everyday spending",
@@ -25,52 +26,6 @@ const dashboardStats = [
   { label: "Bill runway", value: "7d", note: "next payment window" },
   { label: "Subscriptions", value: "4", note: "$76 monthly total" },
 ];
-
-const calendarWeekdays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-
-function getEventsForDay(day, daysInMonth) {
-  const eventsByDay = {
-    1: [{ label: "Rent", amount: "-$1,200", type: "bill" }],
-    4: [{ label: "Power", amount: "-$148", type: "bill" }],
-    8: [{ label: "Phone", amount: "-$59", type: "bill" }],
-    10: [{ label: "Groceries", amount: "-$180", type: "spend" }],
-    15: [{ label: "Payday", amount: "+$1,900", type: "income" }],
-    20: [{ label: "Internet", amount: "-$79", type: "bill" }],
-  };
-
-  if (day === daysInMonth) {
-    return [{ label: "Payday", amount: "+$1,900", type: "income" }];
-  }
-
-  return eventsByDay[day];
-}
-
-function getCurrentMonthCalendar() {
-  const today = new Date();
-  const year = today.getFullYear();
-  const month = today.getMonth();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const firstDay = new Date(year, month, 1).getDay();
-  const leadingBlankCount = (firstDay + 6) % 7;
-  const todayDate = String(today.getDate()).padStart(2, "0");
-
-  return {
-    monthName: today.toLocaleString(undefined, { month: "long" }),
-    today: today.getDate(),
-    todayDate,
-    leadingBlanks: Array.from({ length: leadingBlankCount }, (_, index) => index),
-    days: Array.from({ length: daysInMonth }, (_, index) => {
-      const day = index + 1;
-
-      return {
-        date: String(day).padStart(2, "0"),
-        dayNumber: day,
-        isToday: day === today.getDate(),
-        items: getEventsForDay(day, daysInMonth),
-      };
-    }),
-  };
-}
 
 const pricingPlans = [
   {
@@ -139,21 +94,18 @@ const otherWaysToConnect = [
     id: "01",
     title: "Documentation",
     description: "Check our guides and tutorials.",
-    href: "mailto:hello@talaan.app?subject=Documentation",
     cta: "Ask for documentation",
   },
   {
     id: "02",
     title: "Community",
     description: "Join our updates and product discussions.",
-    href: "mailto:hello@talaan.app?subject=Community",
     cta: "Ask about the community",
   },
   {
     id: "03",
     title: "FAQ",
     description: "Get quick answers about Talaan.",
-    href: "mailto:hello@talaan.app?subject=FAQ",
     cta: "Ask a question",
   },
 ];
@@ -200,21 +152,76 @@ function CountUpScore({ value }) {
   return <span>{score}</span>;
 }
 
+function DonationForm({ user, onSignIn }) {
+  const [amount, setAmount] = useState("10");
+  const [status, setStatus] = useState("");
+  const [busy, setBusy] = useState(false);
+  async function submit(event) {
+    event.preventDefault();
+    setStatus("");
+    setBusy(true);
+    try {
+      const result = await callWorkspaceFunction("createDonationCheckout", {
+        amountCents: Math.round(Number(amount) * 100),
+        successUrl: `${location.origin}${location.pathname}?donation=success#pricing`,
+        cancelUrl: `${location.origin}${location.pathname}?donation=cancelled#pricing`,
+      });
+      if (!result?.checkoutUrl) throw new Error("Checkout URL missing.");
+      location.assign(result.checkoutUrl);
+    } catch {
+      setStatus(user ? "Checkout could not be started. Please try again." : "Sign in before donating so we can attach supporter status.");
+    } finally {
+      setBusy(false);
+    }
+  }
+  return <form className="donation-form" onSubmit={submit}><label>Donation amount (USD)<input required type="number" min="1" max="10000" step="1" value={amount} onChange={(event) => setAmount(event.target.value)} /></label>{user ? <button className="secondary-btn pricing-card-btn" disabled={busy}>{busy ? "Opening checkout…" : "Donate securely"}</button> : <button type="button" className="secondary-btn pricing-card-btn" onClick={onSignIn}>Sign in to donate</button>}{status && <p role="alert">{status}</p>}</form>;
+}
+
+function ContactForm({ user, onSignIn }) {
+  const [form, setForm] = useState({ subject: "General question", message: "" });
+  const [status, setStatus] = useState("");
+  const [busy, setBusy] = useState(false);
+  async function submit(event) {
+    event.preventDefault();
+    setBusy(true);
+    setStatus("");
+    try {
+      await callWorkspaceFunction("sendSupportMessage", form);
+      setForm({ subject: "General question", message: "" });
+      setStatus("Thanks — your message was sent.");
+    } catch {
+      setStatus("Your message could not be sent. Please try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+  if (!user) return <div><p>Sign in so we can reply securely to your account email.</p><button className="primary-btn" type="button" onClick={onSignIn}>Sign in to contact support</button></div>;
+  return <form className="contact-form" onSubmit={submit}><label>Topic<select value={form.subject} onChange={(event) => setForm({ ...form, subject: event.target.value })}><option>General question</option><option>Product feedback</option><option>Account support</option><option>Privacy request</option></select></label><label>Message<textarea required rows="6" maxLength="4000" value={form.message} onChange={(event) => setForm({ ...form, message: event.target.value })} /></label><button className="primary-btn contact-submit" disabled={busy}>{busy ? "Sending…" : "Send message"}</button>{status && <p role={status.startsWith("Thanks") ? "status" : "alert"}>{status}</p>}</form>;
+}
+
 function App() {
-  const modalRef = useRef(null);
-  const currentMonth = getCurrentMonthCalendar();
   const [page, setPage] = useRoute("page", "home");
-  const isDemo = window.location.hash.startsWith("#dashboard");
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(Boolean(auth));
   const [authError, setAuthError] = useState("");
-  const [selectedDate, setSelectedDate] = useState(currentMonth.todayDate);
-  const [showCalendarDetail, setShowCalendarDetail] = useState(false);
-  const [dashboardPage, setDashboardPage] = useState("health");
+  const [donationStatus, setDonationStatus] = useState(() => {
+    const params = new URLSearchParams(location.search);
+    const value = params.get("donation") || params.get("status");
+    return ["success", "cancelled"].includes(value) ? value : "";
+  });
 
-  const selectedCalendarDay = currentMonth.days.find((day) => day.date === selectedDate);
-  const showHealthPage = dashboardPage !== "calendar";
-  const [eventFilter, setEventFilter] = useState("upcoming");
+  useEffect(() => {
+    if (!donationStatus) return;
+    if (location.pathname.endsWith("/donate")) {
+      const basePath = location.pathname.slice(0, -"/donate".length) || "/";
+      history.replaceState(
+        null,
+        "",
+        `${basePath}?donation=${donationStatus}#pricing`,
+      );
+    }
+    setPage("pricing");
+  }, [donationStatus]);
 
   useEffect(() => {
     if (!auth) {
@@ -227,44 +234,16 @@ function App() {
       setAuthLoading(false);
 
       if (currentUser) {
-        setPage("dashboard");
+        if (!window.location.hash || window.location.hash === "#auth") {
+          setPage("workspace");
+        }
       }
     });
   }, []);
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "instant" });
-  }, [page, dashboardPage]);
-
-  useEffect(() => {
-    if (!showCalendarDetail) return;
-    const previousFocus = document.activeElement;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    const dialog = modalRef.current;
-    dialog?.querySelector("button")?.focus();
-    const onKeyDown = (event) => {
-      if (event.key === "Escape") {
-        setShowCalendarDetail(false);
-      }
-      if (event.key === "Tab" && dialog) {
-        const controls = dialog.querySelectorAll('button, a[href], input, select, textarea, [tabindex="0"]');
-        const first = controls[0];
-        const last = controls[controls.length - 1];
-        if (event.shiftKey && document.activeElement === first) {
-          event.preventDefault(); last?.focus();
-        } else if (!event.shiftKey && document.activeElement === last) {
-          event.preventDefault(); first?.focus();
-        }
-      }
-    };
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      document.removeEventListener("keydown", onKeyDown);
-      previousFocus?.focus();
-    };
-  }, [showCalendarDetail]);
+  }, [page]);
 
   const openAuth = () => {
     setPage("auth");
@@ -284,7 +263,7 @@ function App() {
       const provider = new GoogleAuthProvider();
       provider.setCustomParameters({ prompt: "select_account" });
       await signInWithPopup(auth, provider);
-      setPage("dashboard");
+      setPage("workspace");
     } catch (error) {
       setAuthError(error.message || "Google sign-in failed. Please try again.");
     }
@@ -308,7 +287,7 @@ function App() {
             type="button"
             aria-label="Talaan home"
             onClick={() => {
-              setPage(user ? "dashboard" : "home");
+              setPage(user ? "workspace" : "home");
             }}
           >
             <span className="brand-mark" />
@@ -352,10 +331,14 @@ function App() {
           )}
         </header>
 
-        {page === "dashboard" && (user || isDemo) ? (
-          <Dashboard key={user?.uid || "demo"} storageId={user?.uid || localStorage.getItem("talaan-workspace") || "demo"} />
+        {page === "workspace" && user ? (
+          <Dashboard key={user.uid} user={user} storageId={user.uid} />
+        ) : page === "dashboard" ? (
+          <Dashboard key="demo" storageId="demo" />
+        ) : page === "personal" ? (
+          <Dashboard key="personal" storageId="personal" />
         ) : page === "welcome" ? (
-          <section className="welcome-page"><h1>Your money.<br/>Your starting point.</h1><p>Try a sample plan or start your own. Everything stays in this browser; no sign-in needed.</p><button className="primary-btn" onClick={()=>{localStorage.setItem('talaan-workspace','demo');setPage('dashboard');}}>Explore sample plan</button><button className="secondary-btn" onClick={()=>{localStorage.setItem('talaan-workspace','personal');if(!localStorage.getItem('talaan-budget-v1-personal'))localStorage.setItem('talaan-budget-v1-personal','[]');if(!localStorage.getItem('talaan-goals-personal'))localStorage.setItem('talaan-goals-personal','[]');setPage('dashboard');}}>Start / continue my plan</button></section>
+          <section className="welcome-page"><h1>Your money.<br/>Your starting point.</h1><p>Try a sample plan or start your own. Everything stays in this browser; no sign-in needed.</p><button className="primary-btn" onClick={()=>setPage('dashboard')}>Explore sample plan</button><button className="secondary-btn" onClick={()=>{if(!localStorage.getItem('talaan-budget-v1-personal'))localStorage.setItem('talaan-budget-v1-personal','[]');if(!localStorage.getItem('talaan-goals-personal'))localStorage.setItem('talaan-goals-personal','[]');setPage('personal');}}>Start / continue my plan</button></section>
         ) : page === "auth" ? (
           <section className="auth-page" aria-label="Talaan sign in">
             <div className="auth-panel">
@@ -392,6 +375,7 @@ function App() {
           </section>
         ) : page === "pricing" ? (
           <section className="pricing-page" aria-label="Talaan pricing">
+            {donationStatus && <div className={`donation-return donation-${donationStatus}`} role={donationStatus === "success" ? "status" : "alert"}><strong>{donationStatus === "success" ? "Thank you for supporting Talaan." : "Donation checkout was cancelled."}</strong><button type="button" onClick={() => { setDonationStatus(""); history.replaceState(null, "", `${location.pathname}#pricing`); }}>Dismiss</button></div>}
             <div className="pricing-heading">
               <h1>Free. Forever.</h1>
               <p className="lede">
@@ -425,16 +409,16 @@ function App() {
                     ))}
                   </ul>
 
-                  <a
-                    className={`${plan.featured ? "secondary-btn" : "primary-btn"} pricing-card-btn`}
-                    href={plan.featured ? "mailto:hello@talaan.app?subject=Supporter" : "#welcome"}
-                    onClick={plan.featured ? undefined : (event) => {
+                  {plan.featured ? <DonationForm user={user} onSignIn={openAuth} /> : <a
+                    className="primary-btn pricing-card-btn"
+                    href="#welcome"
+                    onClick={(event) => {
                       event.preventDefault();
                       setPage("welcome");
                     }}
                   >
                     {plan.cta}
-                  </a>
+                  </a>}
                 </article>
               ))}
             </div>
@@ -465,7 +449,7 @@ function App() {
 
             <div className="contact-grid">
               <section className="contact-form-card" aria-label="Send a message">
-                <h2>Send us an email.</h2><p>Support is handled by email. Your mail app opens a draft that you can review before sending.</p><a className="primary-btn" href="mailto:hello@talaan.app?subject=Talaan%20feedback">Open email draft</a>
+                <h2>Send us a message.</h2><p>Questions, feedback, and account support are welcome.</p><ContactForm user={user} onSignIn={openAuth} />
               </section>
             </div>
 
@@ -478,7 +462,7 @@ function App() {
                     <div>
                       <h3>{item.title}</h3>
                       <p>{item.description}</p>
-                      <a href={item.href}>{item.cta}</a>
+                      <button className="text-action" type="button" onClick={() => document.querySelector(".contact-form input")?.focus()}>{item.cta}</button>
                     </div>
                   </article>
                 ))}
@@ -540,55 +524,6 @@ function App() {
           </div>
         )}
 
-        {showCalendarDetail && page === "dashboard" && (user || isDemo) && (
-          <div
-            className="modal-layer calendar-modal-layer"
-            ref={modalRef}
-            role="dialog"
-            aria-modal="true"
-            aria-label={`${currentMonth.monthName} ${selectedDate} money events`}
-          >
-            <button
-              className="modal-scrim"
-              type="button"
-              aria-label="Close calendar details"
-              onClick={() => setShowCalendarDetail(false)}
-            />
-            <section className="calendar-detail-modal">
-              <button
-                className="back-btn"
-                type="button"
-                onClick={() => setShowCalendarDetail(false)}
-              >
-                Close
-              </button>
-              <div className="calendar-detail" aria-live="polite">
-                <span>{currentMonth.monthName} {selectedDate}</span>
-                {selectedCalendarDay?.items?.length ? (
-                  <div className="calendar-detail-list">
-                    {selectedCalendarDay.items.map((item) => (
-                      <div className={`calendar-detail-row calendar-detail-${item.type}`} key={item.label}>
-                        <div>
-                          <strong>{item.label}</strong>
-                          <small>
-                            {selectedCalendarDay.dayNumber < currentMonth.today
-                              ? "Past event"
-                              : selectedCalendarDay.isToday
-                                ? "Today"
-                                : "Expected event"}
-                          </small>
-                        </div>
-                        <b>{item.amount}</b>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p>No money events scheduled for this date.</p>
-                )}
-              </div>
-            </section>
-          </div>
-        )}
       </section>
     </main>
   );

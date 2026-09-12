@@ -1,0 +1,273 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function owns(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    function validOwner(uid, data) {
+      return data.ownerId == uid;
+    }
+
+    function immutableOwner(uid) {
+      return request.resource.data.ownerId == resource.data.ownerId
+        && request.resource.data.ownerId == uid;
+    }
+
+    function validText(value, max) {
+      return value is string && value.size() > 0 && value.size() <= max;
+    }
+
+    function validCents(value) {
+      return value is int && value >= 0 && value <= 100000000;
+    }
+
+    function optionalTimestamp(data, field) {
+      return !(field in data) || data[field] == null || data[field] is timestamp;
+    }
+
+    match /users/{uid} {
+      function clientProfileFields() {
+        return [
+          'ownerId', 'email', 'displayName', 'currency', 'timezone',
+          'startPage', 'reminderEnabled', 'reminderHour',
+          'reminderLeadDays', 'createdAt', 'updatedAt'
+        ];
+      }
+
+      function validProfile(data) {
+        return data.currency == 'usd'
+          && validText(data.timezone, 64)
+          && data.startPage in ['overview', 'schedule', 'goals']
+          && (!('reminderEnabled' in data) || data.reminderEnabled is bool)
+          && (!('reminderHour' in data)
+            || (data.reminderHour is int
+              && data.reminderHour >= 0 && data.reminderHour <= 23))
+          && (!('reminderLeadDays' in data)
+            || (data.reminderLeadDays is int
+              && data.reminderLeadDays >= 0 && data.reminderLeadDays <= 30));
+      }
+
+      allow get: if owns(uid);
+      allow list: if false;
+      allow create: if owns(uid)
+        && request.resource.data.keys().hasOnly(clientProfileFields())
+        && validOwner(uid, request.resource.data)
+        && request.resource.data.email == request.auth.token.email
+        && validProfile(request.resource.data)
+        && optionalTimestamp(request.resource.data, 'createdAt')
+        && optionalTimestamp(request.resource.data, 'updatedAt');
+      allow update: if owns(uid)
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(clientProfileFields())
+        && !request.resource.data.diff(resource.data).affectedKeys()
+          .hasAny(['ownerId', 'email', 'createdAt'])
+        && immutableOwner(uid)
+        && request.resource.data.email == resource.data.email
+        && validProfile(request.resource.data)
+        && optionalTimestamp(request.resource.data, 'updatedAt');
+      // Account deletion is recursive and must run through the callable function.
+      allow delete: if false;
+
+      match /events/{eventId} {
+        function fields() {
+          return [
+            'ownerId', 'name', 'type', 'amountCents', 'currency', 'category',
+            'date', 'status', 'notes', 'reminderAt', 'reminderSent',
+            'recurringRuleId', 'occurrenceAt', 'reminderSentAt', 'createdAt',
+            'updatedAt'
+          ];
+        }
+
+        function valid(data) {
+          return data.keys().hasOnly(fields())
+            && validText(data.name, 100)
+            && data.type in ['income', 'expense', 'saving']
+            && validCents(data.amountCents) && data.amountCents > 0
+            && data.currency == 'usd'
+            && validText(data.category, 60)
+            && data.date is timestamp
+            && (!('status' in data)
+              || data.status in ['planned', 'completed'])
+            && (!('notes' in data) || (data.notes is string && data.notes.size() <= 1000))
+            && optionalTimestamp(data, 'reminderAt')
+            && (!('reminderSent' in data)
+              || data.reminderSent is bool)
+            && optionalTimestamp(data, 'reminderSentAt')
+            && optionalTimestamp(data, 'occurrenceAt')
+            && optionalTimestamp(data, 'createdAt')
+            && optionalTimestamp(data, 'updatedAt');
+        }
+
+        allow read: if owns(uid);
+        allow create: if owns(uid) && eventId.size() > 0 && eventId.size() <= 128
+          && validOwner(uid, request.resource.data)
+          && !request.resource.data.keys().hasAny([
+            'recurringRuleId', 'occurrenceAt', 'reminderSentAt'
+          ])
+          && (!('reminderSent' in request.resource.data)
+            || request.resource.data.reminderSent == false)
+          && valid(request.resource.data);
+        allow update: if owns(uid) && immutableOwner(uid)
+          && !request.resource.data.diff(resource.data).affectedKeys()
+            .hasAny([
+              'ownerId', 'createdAt', 'recurringRuleId', 'occurrenceAt',
+              'reminderSentAt'
+            ])
+          && (!request.resource.data.diff(resource.data).affectedKeys()
+            .hasAny(['reminderSent']) || request.resource.data.reminderSent == false)
+          && valid(request.resource.data);
+        allow delete: if owns(uid);
+      }
+
+      match /goals/{goalId} {
+        function fields() {
+          return [
+            'ownerId', 'name', 'targetCents', 'currentCents', 'currency',
+            'status', 'targetDate', 'notes', 'contributions', 'createdAt',
+            'updatedAt'
+          ];
+        }
+
+        function valid(data) {
+          return data.keys().hasOnly(fields())
+            && validText(data.name, 100)
+            && validCents(data.targetCents) && data.targetCents > 0
+            && validCents(data.currentCents)
+            && data.currentCents <= data.targetCents
+            && data.currency == 'usd'
+            && data.status in ['active', 'completed', 'archived']
+            && (!('contributions' in data)
+              || (data.contributions is list
+                && data.contributions.size() <= 500))
+            && optionalTimestamp(data, 'targetDate')
+            && (!('notes' in data) || (data.notes is string && data.notes.size() <= 1000))
+            && optionalTimestamp(data, 'createdAt')
+            && optionalTimestamp(data, 'updatedAt');
+        }
+
+        allow read: if owns(uid);
+        allow create: if owns(uid) && goalId.size() > 0 && goalId.size() <= 128
+          && validOwner(uid, request.resource.data)
+          && valid(request.resource.data);
+        allow update: if owns(uid) && immutableOwner(uid)
+          && !request.resource.data.diff(resource.data).affectedKeys()
+            .hasAny(['ownerId', 'createdAt'])
+          && valid(request.resource.data);
+        allow delete: if owns(uid);
+      }
+
+      match /recurringRules/{ruleId} {
+        function fields() {
+          return [
+            'ownerId', 'enabled', 'frequency', 'interval', 'nextRunAt',
+            'endAt', 'anchorDay', 'anchorMonth', 'reminderMinutesBefore',
+            'event', 'createdAt', 'updatedAt'
+          ];
+        }
+
+        function validEvent(event) {
+          return event is map
+            && event.keys().hasOnly([
+              'name', 'type', 'amountCents', 'currency', 'category', 'notes'
+            ])
+            && validText(event.name, 100)
+            && event.type in ['income', 'expense', 'saving']
+            && validCents(event.amountCents)
+            && event.currency == 'usd'
+            && validText(event.category, 60)
+            && (!('notes' in event)
+              || (event.notes is string && event.notes.size() <= 1000));
+        }
+
+        function valid(data) {
+          return data.keys().hasOnly(fields())
+            && data.enabled is bool
+            && data.frequency in ['daily', 'weekly', 'monthly', 'yearly']
+            && data.interval is int && data.interval >= 1 && data.interval <= 365
+            && (!('anchorDay' in data)
+              || (data.anchorDay is int && data.anchorDay >= 1 && data.anchorDay <= 31))
+            && (!('anchorMonth' in data)
+              || (data.anchorMonth is int
+                && data.anchorMonth >= 0 && data.anchorMonth <= 11))
+            && data.nextRunAt is timestamp
+            && optionalTimestamp(data, 'endAt')
+            && (!('reminderMinutesBefore' in data)
+              || (data.reminderMinutesBefore is int
+                && data.reminderMinutesBefore >= 0
+                && data.reminderMinutesBefore <= 43200))
+            && validEvent(data.event)
+            && optionalTimestamp(data, 'createdAt')
+            && optionalTimestamp(data, 'updatedAt');
+        }
+
+        allow read: if owns(uid);
+        allow create: if owns(uid) && ruleId.size() > 0 && ruleId.size() <= 128
+          && validOwner(uid, request.resource.data)
+          && valid(request.resource.data);
+        allow update: if owns(uid) && immutableOwner(uid)
+          && !request.resource.data.diff(resource.data).affectedKeys()
+            .hasAny(['ownerId', 'createdAt'])
+          && valid(request.resource.data);
+        allow delete: if owns(uid);
+      }
+
+      match /guardrails/{guardrailId} {
+        function fields() {
+          return [
+            'ownerId', 'name', 'period', 'limitCents', 'currency', 'category',
+            'enabled', 'createdAt', 'updatedAt'
+          ];
+        }
+
+        function valid(data) {
+          return data.keys().hasOnly(fields())
+            && validText(data.name, 100)
+            && data.period in ['weekly', 'monthly']
+            && validCents(data.limitCents) && data.limitCents > 0
+            && data.currency == 'usd'
+            && (!('category' in data)
+              || (data.category is string && data.category.size() <= 60))
+            && data.enabled is bool
+            && optionalTimestamp(data, 'createdAt')
+            && optionalTimestamp(data, 'updatedAt');
+        }
+
+        allow read: if owns(uid);
+        allow create: if owns(uid)
+          && guardrailId.size() > 0 && guardrailId.size() <= 128
+          && validOwner(uid, request.resource.data)
+          && valid(request.resource.data);
+        allow update: if owns(uid) && immutableOwner(uid)
+          && !request.resource.data.diff(resource.data).affectedKeys()
+            .hasAny(['ownerId', 'createdAt'])
+          && valid(request.resource.data);
+        allow delete: if owns(uid);
+      }
+    }
+
+    match /donations/{document=**} {
+      allow read, write: if false;
+    }
+    match /supportRequests/{document=**} {
+      allow read, write: if false;
+    }
+    match /webhookEvents/{document=**} {
+      allow read, write: if false;
+    }
+    match /reminderDeliveries/{document=**} {
+      allow read, write: if false;
+    }
+    match /rateLimits/{document=**} {
+      allow read, write: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
