@@ -1,0 +1,19 @@
+{
+  "name": "talaan-functions",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "engines": {
+    "node": "20"
+  },
+  "main": "src/index.js",
+  "scripts": {
+    "test": "node --test"
+  },
+  "dependencies": {
+    "firebase-admin": "^13.5.0",
+    "firebase-functions": "^6.4.0",
+    "resend": "^6.0.2",
+    "stripe": "^18.5.0"
+  }
+}

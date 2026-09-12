@@ -611,6 +611,8 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
 .navigation-icon{display:block;flex-shrink:0}
 @media(max-width:699px){
 .topbar nav,.ledger-dashboard .dashboard-stage-control{position:fixed;top:auto;left:16px;right:16px;bottom:calc(12px + env(safe-area-inset-bottom));width:auto;max-width:440px;margin:0 auto;padding:6px;gap:4px;border:1px solid #fff9ee;border-radius:18px;background:#f7f1e8;box-shadow:0 6px 24px #25231f20;transform:none}
+.screen{padding-bottom:calc(92px + env(safe-area-inset-bottom))}
+.dashboard-page{padding-bottom:calc(116px + env(safe-area-inset-bottom))}
 .topbar nav button,.ledger-dashboard .stage-dot{display:flex;align-items:center;justify-content:center;gap:5px;border:0;min-height:52px;padding:7px 4px;border-radius:12px;background:transparent;color:#766b5b;font-size:12px;font-weight:500;box-shadow:none;transform:none}
 .topbar nav button{flex-direction:column}
 .ledger-dashboard .stage-dot{flex-direction:row;gap:9px;font-size:14px}
@@ -707,3 +709,25 @@ select,.contact-form select,.entry-dialog select,.settings-block select,.schedul
 .mood-help{font-size:13px;color:#d2c5af;margin:12px 0 20px}.mood-help summary{cursor:pointer;min-height:36px}.mood-help p{line-height:1.6;margin:0}
 .restore-label{margin-top:24px}.restore-label input{max-width:100%;font-size:14px;padding:14px 0}.info-panel .text-action{display:block;margin-top:12px}
 .ledger-event small,.ledger-footnote,.page-toolbar,.more-links small,.goal-card footer,.goal-card strong small,.settings-block .ledger-footnote{font-size:14px}
+
+/* Cloud workspace states and rollout controls. */
+.status-message,.guardrail-warning,.migration-panel{padding:16px;margin:0 0 18px;border:1px solid #b7a58c;background:#e4d8c6;font-size:14px;line-height:1.6}
+.status-error{border-color:#a74735;background:#f2d8cf;color:#792f22}
+.guardrail-warning{border-left:5px solid #bd3e26}
+.migration-panel h2{font-size:21px;margin:0 0 8px}
+.migration-panel p{margin:0 0 14px;color:#665947}
+.migration-panel>div{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.settings-form textarea,.settings-form input,.settings-block input,.donation-form input{width:100%;min-height:48px;padding:12px;background:#faf5eb;border:1px solid #b4a58d;color:var(--ink);font-size:16px}
+.settings-form textarea{resize:vertical}
+.check-label{display:flex!important;grid-template-columns:auto 1fr!important;flex-direction:row;align-items:flex-start;gap:10px!important;line-height:1.5}
+.check-label input{width:20px;min-height:20px;flex:0 0 20px;margin-top:2px}
+.donation-form{display:grid;gap:12px}
+.donation-form label{display:grid;gap:8px;font-size:14px}
+.donation-form p{font-size:13px;margin:0;color:#7d3023}
+.danger-zone{border-top:1px solid #b7a58c;margin-top:30px;padding-top:22px}
+.danger-zone h3{font-size:18px}
+.danger-zone .ledger-delete{border:1px solid #a33723;padding:12px}
+.donation-return{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:16px;margin:0 auto 28px;max-width:1000px;border:1px solid #84735e;background:#e2d8c8}
+.donation-return button{border:0;background:transparent;color:#993924;text-decoration:underline}
+.donation-success{border-left:5px solid #596f3f}
+.donation-cancelled{border-left:5px solid #bd3e26}

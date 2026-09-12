@@ -1,10 +1,97 @@
-import {validBackup} from "./backupData.mjs";
-import {useState} from 'react';
-export default function Backup({storageId,entries}){
- const [pending,setPending]=useState(null),[error,setError]=useState('');
- const keys=[`talaan-budget-v1-${storageId}`,`talaan-goals-${storageId}`,`talaan-profile-${storageId}`];
- function exportData(){try{const data={version:2,entries,goals:JSON.parse(localStorage.getItem(keys[1])||'[]'),profile:JSON.parse(localStorage.getItem(keys[2])||'{"name":"","startPage":"overview"}')};const url=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='talaan-backup.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}catch{setError('Could not create a backup. Please try again.');}}
- async function read(file){setError('');setPending(null);if(!file)return;try{if(file.size>5000000)throw Error();const data=JSON.parse(await file.text());if(!validBackup(data))throw Error();setPending(data);}catch{setError('Choose a valid Talaan full backup (version 2), smaller than 5 MB. Nothing was changed.');}}
- function restore(){const old=keys.map(k=>localStorage.getItem(k));try{[pending.entries,pending.goals,pending.profile].forEach((v,i)=>localStorage.setItem(keys[i],JSON.stringify(v)));location.reload();}catch{keys.forEach((k,i)=>{try{old[i]===null?localStorage.removeItem(k):localStorage.setItem(k,old[i]);}catch{}});setError('Restore failed. Your previous data was retained where possible.');}}
- return <section className="settings-block"><h2>Backup & restore</h2><p>A full backup includes events, goals, contributions, and preferences for this workspace.</p><button className="ledger-add" onClick={exportData}>Download full backup</button><label className="restore-label">Restore a backup<input type="file" accept="application/json,.json" onChange={e=>read(e.target.files[0])}/></label>{error&&<p role="alert">{error}</p>}{pending&&<div className="info-panel"><h3>Review before restoring</h3><p>{pending.entries.length} events · {pending.goals.length} goals · profile and preferences</p><p>This replaces this workspace’s data. Download a backup first if you want to keep the current plan.</p><button className="ledger-add" onClick={restore}>Replace with this backup</button><button className="text-action" onClick={()=>setPending(null)}>Cancel restore</button></div>}</section>;
+import { validBackup } from "./backupData.mjs";
+import { useState } from "react";
+
+function validCloudBackup(data) {
+  return Boolean(
+    data?.version === 1 &&
+      data.profile &&
+      ["events", "goals", "recurringRules", "guardrails"].every(
+        (name) =>
+          Array.isArray(data[name]) &&
+          data[name].every(
+            (row) =>
+              row &&
+              typeof row.id === "string" &&
+              /^[A-Za-z0-9_-]{1,128}$/.test(row.id) &&
+              row.data &&
+              typeof row.data === "object",
+          ),
+      ),
+  );
+}
+
+function download(data) {
+  if (data?.url) {
+    location.assign(data.url);
+    return;
+  }
+  const payload = data?.backup || data;
+  const url = URL.createObjectURL(
+    new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" }),
+  );
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = "talaan-backup.json";
+  anchor.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+export default function Backup({ workspace }) {
+  const [pending, setPending] = useState(null);
+  const [error, setError] = useState("");
+  const [status, setStatus] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function exportData() {
+    setBusy(true); setError(""); setStatus("");
+    try {
+      download(await workspace.exportWorkspace());
+      setStatus("Your backup is ready.");
+    } catch {
+      setError("Could not create a backup. Please try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function read(file) {
+    setError(""); setPending(null); setStatus("");
+    if (!file) return;
+    try {
+      if (file.size > 5000000) throw new Error();
+      const data = JSON.parse(await file.text());
+      if (!(workspace.isCloud ? validCloudBackup(data) : validBackup(data))) throw new Error();
+      setPending(data);
+    } catch {
+      setError(`Choose a valid Talaan ${workspace.isCloud ? "cloud" : "local"} backup, smaller than 5 MB.`);
+    }
+  }
+
+  async function restore() {
+    setBusy(true); setError("");
+    try {
+      await workspace.restore(pending);
+      setPending(null);
+      setStatus("Backup restored successfully.");
+    } catch {
+      setError("Restore failed. Your current workspace was not replaced.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove() {
+    if (!window.confirm("Permanently delete this workspace and all its data?")) return;
+    setBusy(true); setError("");
+    try {
+      await workspace.removeWorkspace();
+      setStatus("Workspace data deleted.");
+    } catch {
+      setError("Workspace deletion failed. Please try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return <section className="settings-block" aria-busy={busy}><h2>Backup & restore</h2><p>{workspace.isCloud ? "Cloud exports, restores, and deletion are processed securely by the backend." : "A full backup includes this local workspace."}</p><button className="ledger-add" disabled={busy} onClick={exportData}>{busy ? "Working…" : "Download full backup"}</button><label className="restore-label">Restore a backup<input type="file" accept="application/json,.json" disabled={busy} onChange={(event) => read(event.target.files[0])} /></label>{error && <p role="alert">{error}</p>}{status && <p role="status">{status}</p>}{pending && <div className="info-panel"><h3>Review before restoring</h3><p>{pending.entries.length} events · {pending.goals.length} goals</p><p>This replaces this workspace’s data.</p><button className="ledger-add" disabled={busy} onClick={restore}>Replace with this backup</button><button className="text-action" onClick={() => setPending(null)}>Cancel</button></div>}<div className="danger-zone"><h3>Delete workspace</h3><p>This cannot be undone. Download a backup first if needed.</p><button className="ledger-delete" type="button" disabled={busy} onClick={remove}>Delete all workspace data</button></div></section>;
 }
