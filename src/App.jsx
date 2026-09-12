@@ -1,4 +1,7 @@
-import { useEffect, useState } from "react";
+import useRoute from "./useRoute";
+import NavIcon from "./NavIcon";
+import Dashboard from "./Dashboard";
+import { useEffect, useRef, useState } from "react";
 import {
   GoogleAuthProvider,
   onAuthStateChanged,
@@ -8,18 +11,10 @@ import {
 import { auth, firebaseConfigured } from "./firebase";
 
 const scanItems = [
-  {
-    id: "02",
-    text: "Detect recurring charges, fee spikes, and forgotten subscriptions.",
-  },
-  {
-    id: "03",
-    text: "Build spending guardrails from real cashflow, not ideal guesses.",
-  },
-  {
-    id: "04",
-    text: "Forecast paydays, bills, and goal progress in one clean review.",
-  },
+  "Track bills and everyday spending",
+  "Organize bills and subscriptions",
+  "Set spending guardrails",
+  "Plan paydays and savings goals",
 ];
 
 const navItems = ["Features", "Pricing", "Team", "Contact"];
@@ -82,15 +77,15 @@ const pricingPlans = [
     name: "Free",
     price: "$0",
     note: "No credit card required",
-    cta: "Sign up with Google",
+    cta: "Open your workspace",
     features: [
-      "Real-time transaction scanning",
-      "Subscription detection",
-      "Cashflow forecasting",
-      "Budget guardrails",
+      "Manual income and expense planning",
+      "Categorized money events",
+      "Monthly plan summary",
+      "Plan status and reminders in Schedule",
       "Goal tracking",
-      "Financial health score",
-      "All future features",
+      "Budget mood indicator",
+      "Local data backup and restore",
     ],
   },
   {
@@ -145,21 +140,21 @@ const otherWaysToConnect = [
     title: "Documentation",
     description: "Check our guides and tutorials.",
     href: "mailto:hello@talaan.app?subject=Documentation",
-    cta: "View Docs",
+    cta: "Ask for documentation",
   },
   {
     id: "02",
     title: "Community",
     description: "Join our updates and product discussions.",
     href: "mailto:hello@talaan.app?subject=Community",
-    cta: "Join Community",
+    cta: "Ask about the community",
   },
   {
     id: "03",
     title: "FAQ",
     description: "Get quick answers about Talaan.",
     href: "mailto:hello@talaan.app?subject=FAQ",
-    cta: "Read FAQ",
+    cta: "Ask a question",
   },
 ];
 
@@ -206,9 +201,10 @@ function CountUpScore({ value }) {
 }
 
 function App() {
+  const modalRef = useRef(null);
   const currentMonth = getCurrentMonthCalendar();
-  const [showPreview, setShowPreview] = useState(false);
-  const [page, setPage] = useState("home");
+  const [page, setPage] = useRoute("page", "home");
+  const isDemo = window.location.hash.startsWith("#dashboard");
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(Boolean(auth));
   const [authError, setAuthError] = useState("");
@@ -217,7 +213,8 @@ function App() {
   const [dashboardPage, setDashboardPage] = useState("health");
 
   const selectedCalendarDay = currentMonth.days.find((day) => day.date === selectedDate);
-  const showHealthPage = dashboardPage === "health";
+  const showHealthPage = dashboardPage !== "calendar";
+  const [eventFilter, setEventFilter] = useState("upcoming");
 
   useEffect(() => {
     if (!auth) {
@@ -235,9 +232,42 @@ function App() {
     });
   }, []);
 
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "instant" });
+  }, [page, dashboardPage]);
+
+  useEffect(() => {
+    if (!showCalendarDetail) return;
+    const previousFocus = document.activeElement;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const dialog = modalRef.current;
+    dialog?.querySelector("button")?.focus();
+    const onKeyDown = (event) => {
+      if (event.key === "Escape") {
+        setShowCalendarDetail(false);
+      }
+      if (event.key === "Tab" && dialog) {
+        const controls = dialog.querySelectorAll('button, a[href], input, select, textarea, [tabindex="0"]');
+        const first = controls[0];
+        const last = controls[controls.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault(); last?.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault(); first?.focus();
+        }
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", onKeyDown);
+      previousFocus?.focus();
+    };
+  }, [showCalendarDetail]);
+
   const openAuth = () => {
     setPage("auth");
-    setShowPreview(false);
     setAuthError("");
   };
 
@@ -245,7 +275,8 @@ function App() {
     setAuthError("");
 
     if (!firebaseConfigured || !auth) {
-      setAuthError("Firebase is not configured yet. Add the Vite env vars before deploying.");
+      setPage("auth");
+      setAuthError("Sign-in is not available yet. Please try again later.");
       return;
     }
 
@@ -270,26 +301,26 @@ function App() {
 
   return (
     <main className="shell">
-      <section className="screen" aria-label="Talaan budgeting app landing page">
+      <section className="screen" aria-label="Talaan budgeting app">
         <header className="topbar">
           <button
             className="brand"
             type="button"
             aria-label="Talaan home"
             onClick={() => {
-              setPage("home");
-              setShowPreview(false);
+              setPage(user ? "dashboard" : "home");
             }}
           >
             <span className="brand-mark" />
             <span>talaan</span>
           </button>
 
-          {!user && (
+          {!user && page !== "dashboard" && (
             <nav aria-label="Primary navigation">
               {navItems.map((item) => (
                 <button
                   key={item}
+                  aria-current={(item.toLowerCase() === page || (item === "Features" && page === "home")) ? "page" : undefined}
                   type="button"
                   onClick={() => {
                     setPage(
@@ -301,10 +332,10 @@ function App() {
                             ? "contact"
                             : "home",
                     );
-                    setShowPreview(false);
                   }}
                 >
-                  {item}
+                  <NavIcon name={item === "Features" ? "home" : item.toLowerCase()} />
+                  {item === "Features" ? "Home" : item}
                 </button>
               ))}
             </nav>
@@ -316,119 +347,15 @@ function App() {
             </button>
           ) : (
             <button className="auth-chip" type="button" onClick={openAuth}>
-              Login / Sign up
+              Sign in
             </button>
           )}
         </header>
 
-        {page === "dashboard" && user ? (
-          <section className={`dashboard-page dashboard-page-${dashboardPage}`} aria-label="Talaan dashboard">
-            <div className="dashboard-heading">
-              <div>
-                <h1>
-                  {showHealthPage
-                    ? `Good to see you, ${user.displayName?.split(" ")[0] || "there"}.`
-                    : `${currentMonth.monthName}.`}
-                </h1>
-              </div>
-            </div>
-
-            {showHealthPage ? (
-              <section className="dashboard-preview" aria-label="Budget health dashboard">
-                <div className="health-core dashboard-health" aria-label="Budget health score 82">
-                  <div className="health-score">
-                    <CountUpScore value={82} />
-                    <small>%</small>
-                  </div>
-                  <p>BUDGET HEALTH</p>
-                </div>
-                <div className="mini-meters dashboard-meters" aria-label="Dashboard budget meters">
-                  <div className="mini-meter mini-meter-bills">
-                    <strong>12</strong>
-                    <small>Bills</small>
-                  </div>
-                  <div className="mini-meter mini-meter-spend">
-                    <strong>74%</strong>
-                    <small>Spend</small>
-                  </div>
-                  <div className="mini-meter mini-meter-goals">
-                    <strong>3</strong>
-                    <small>Goals</small>
-                  </div>
-                </div>
-                <div className="ticker dashboard-ticker" aria-label="Budget metrics">
-                  {dashboardStats.map((stat) => (
-                    <span key={stat.label}>
-                      <strong>{stat.value}</strong>
-                      <small>{stat.label}</small>
-                    </span>
-                  ))}
-                </div>
-              </section>
-            ) : (
-              <section className="dashboard-calendar-page" aria-label="Monthly money calendar">
-                <div className="money-calendar dashboard-calendar-full">
-                  <div className="calendar-weekdays" aria-hidden="true">
-                    {calendarWeekdays.map((weekday) => (
-                      <span key={weekday}>{weekday}</span>
-                    ))}
-                  </div>
-                  <div className="calendar-grid">
-                    {currentMonth.leadingBlanks.map((blank) => (
-                      <div className="calendar-day calendar-empty" key={`blank-${blank}`} />
-                    ))}
-                    {currentMonth.days.map((day) => (
-                      <button
-                        className={`${day.items ? "calendar-day has-event" : "calendar-day"}${
-                          day.isToday ? " today-day" : ""
-                        }${selectedDate === day.date ? " selected-day" : ""}`}
-                        style={{ "--day-index": day.dayNumber }}
-                        type="button"
-                        key={day.date}
-                        onClick={() => {
-                          setSelectedDate(day.date);
-                          setShowCalendarDetail(true);
-                        }}
-                        aria-pressed={selectedDate === day.date}
-                      >
-                        <strong>{day.date}</strong>
-                        {day.isToday && <em className="today-label">Today</em>}
-                        {day.items?.map((item) => (
-                          <small
-                            className={`calendar-dot calendar-${item.type}`}
-                            key={item.label}
-                            aria-label={`${item.label} ${item.amount}`}
-                            title={`${item.label} ${item.amount}`}
-                          />
-                        ))}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </section>
-            )}
-
-            <div
-              className={`dashboard-stage-control ${showHealthPage ? "stage-health" : "stage-calendar"}`}
-              aria-label="Dashboard stages"
-            >
-              <span className="stage-liquid" aria-hidden="true" />
-              <button
-                className={showHealthPage ? "stage-dot active-stage" : "stage-dot"}
-                type="button"
-                aria-label="Show health dashboard"
-                aria-pressed={showHealthPage}
-                onClick={() => setDashboardPage("health")}
-              />
-              <button
-                className={!showHealthPage ? "stage-dot active-stage" : "stage-dot"}
-                type="button"
-                aria-label="Show calendar"
-                aria-pressed={!showHealthPage}
-                onClick={() => setDashboardPage("calendar")}
-              />
-            </div>
-          </section>
+        {page === "dashboard" && (user || isDemo) ? (
+          <Dashboard key={user?.uid || "demo"} storageId={user?.uid || localStorage.getItem("talaan-workspace") || "demo"} />
+        ) : page === "welcome" ? (
+          <section className="welcome-page"><h1>Your money.<br/>Your starting point.</h1><p>Try a sample plan or start your own. Everything stays in this browser; no sign-in needed.</p><button className="primary-btn" onClick={()=>{localStorage.setItem('talaan-workspace','demo');setPage('dashboard');}}>Explore sample plan</button><button className="secondary-btn" onClick={()=>{localStorage.setItem('talaan-workspace','personal');if(!localStorage.getItem('talaan-budget-v1-personal'))localStorage.setItem('talaan-budget-v1-personal','[]');if(!localStorage.getItem('talaan-goals-personal'))localStorage.setItem('talaan-goals-personal','[]');setPage('dashboard');}}>Start / continue my plan</button></section>
         ) : page === "auth" ? (
           <section className="auth-page" aria-label="Talaan sign in">
             <div className="auth-panel">
@@ -436,8 +363,7 @@ function App() {
                 <span className="auth-kicker">Google auth</span>
                 <h1>Start with Google.</h1>
                 <p className="lede">
-                  Use one secure Google sign-in for Talaan. The app stays simple for
-                  Vercel hosting while Firebase handles identity.
+                  A clearer view of your money starts here. Sign in securely with your Google account.
                 </p>
               </div>
 
@@ -452,15 +378,13 @@ function App() {
                   {authLoading ? "Checking session..." : "Continue with Google"}
                 </button>
                 <p>
-                  No password flow for now. Google is the only sign-in method while
-                  Talaan is early.
+                  One account. No extra password to remember.
                 </p>
 
                 {authError && <p className="auth-error">{authError}</p>}
                 {!firebaseConfigured && (
                   <p className="auth-error">
-                    Firebase env vars are missing locally. Add them in `.env.local` and
-                    in Vercel project settings.
+                    Sign-in is currently unavailable. Please check back later.
                   </p>
                 )}
               </div>
@@ -502,11 +426,11 @@ function App() {
                   </ul>
 
                   <a
-                    className={`${plan.featured ? "primary-btn" : "secondary-btn"} pricing-card-btn`}
-                    href={plan.featured ? "mailto:hello@talaan.app?subject=Supporter" : undefined}
+                    className={`${plan.featured ? "secondary-btn" : "primary-btn"} pricing-card-btn`}
+                    href={plan.featured ? "mailto:hello@talaan.app?subject=Supporter" : "#welcome"}
                     onClick={plan.featured ? undefined : (event) => {
                       event.preventDefault();
-                      handleGoogleAuth();
+                      setPage("welcome");
                     }}
                   >
                     {plan.cta}
@@ -541,38 +465,7 @@ function App() {
 
             <div className="contact-grid">
               <section className="contact-form-card" aria-label="Send a message">
-                <form className="contact-form" onSubmit={(event) => event.preventDefault()}>
-                  <label htmlFor="contact-name">Name *</label>
-                  <input id="contact-name" type="text" placeholder="Your name" />
-
-                  <label htmlFor="contact-email">Email *</label>
-                  <input id="contact-email" type="email" placeholder="you@email.com" />
-
-                  <label htmlFor="contact-subject">Subject *</label>
-                  <input id="contact-subject" type="text" placeholder="What's this about?" />
-
-                  <label htmlFor="contact-category">Category</label>
-                  <select id="contact-category" defaultValue="General Inquiry">
-                    <option>General Inquiry</option>
-                    <option>Support</option>
-                    <option>Feedback</option>
-                    <option>Partnership</option>
-                  </select>
-
-                  <label htmlFor="contact-message">Message *</label>
-                  <textarea
-                    id="contact-message"
-                    rows={6}
-                    placeholder="Tell us what's on your mind..."
-                  />
-
-                  <button className="primary-btn contact-submit" type="submit">
-                    Send Message
-                  </button>
-                  <p className="contact-policy">
-                    By submitting this form, you agree to our privacy policy.
-                  </p>
-                </form>
+                <h2>Send us an email.</h2><p>Support is handled by email. Your mail app opens a draft that you can review before sending.</p><a className="primary-btn" href="mailto:hello@talaan.app?subject=Talaan%20feedback">Open email draft</a>
               </section>
             </div>
 
@@ -624,115 +517,33 @@ function App() {
           <div className="hero-stage">
             <section className="intro-panel" aria-label="Talaan introduction">
             <div className="intro-content">
-              <h1>TALAAN</h1>
-              <p className="lede">
-                Your command center for staying ahead of your money.
-              </p>
+              <span className="intro-wordmark">talaan<span className="wordmark-period">.</span></span>
+              <h1>Your money. <br />A little clearer.</h1>
+              <ul className="intro-features" aria-label="Talaan features">
+                {scanItems.map((item, index) => <li key={item}><span aria-hidden="true">[{String(index + 1).padStart(2, "0")}]</span>{item}</li>)}
+              </ul>
 
-              <div className="scan-list" id="features">
-                <div>
-                  <span>[01]</span>
-                  <p>
-                    Scan bills, subscriptions, and spending drift before they break your month.
-                  </p>
-                </div>
-                {scanItems.map((item) => (
-                  <div key={item.id}>
-                    <span>[{item.id}]</span>
-                    <p>{item.text}</p>
-                  </div>
-                ))}
-              </div>
+
+            </div>
+          </section>
 
               <div className="cta-row" id="signup">
                 <button
                   className="primary-btn"
                   type="button"
-                  onClick={handleGoogleAuth}
+                  onClick={() => setPage("welcome")}
                 >
-                  Sign up with Google
+                  Open your workspace
                 </button>
-                <button
-                  className="secondary-btn"
-                  type="button"
-                  onClick={() => setShowPreview(true)}
-                >
-                  Preview
-                </button>
+
               </div>
-            </div>
-          </section>
           </div>
         )}
 
-        {showPreview && (
-          <div
-            className="modal-layer"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Budget preview"
-          >
-            <button
-              className="modal-scrim"
-              type="button"
-              aria-label="Close preview"
-              onClick={() => setShowPreview(false)}
-            />
-            <section className="signal-panel preview-modal" aria-label="Budget health visualization">
-              <div className="panel-label finance-badge">BUDGET PREVIEW</div>
-              <button
-                className="back-btn"
-                type="button"
-                onClick={() => setShowPreview(false)}
-              >
-                Back
-              </button>
-              <div className="health-core" aria-label="Sample budget health score 82">
-                <div className="health-score">
-                  <CountUpScore value={82} />
-                  <small>%</small>
-                </div>
-                <p>SAMPLE HEALTH</p>
-              </div>
-              <div className="mini-meters" aria-label="Sample budget preview meters">
-                <div className="mini-meter mini-meter-bills">
-                  <strong>12</strong>
-                  <small>Bills</small>
-                </div>
-                <div className="mini-meter mini-meter-spend">
-                  <strong>74%</strong>
-                  <small>Spend</small>
-                </div>
-                <div className="mini-meter mini-meter-goals">
-                  <strong>3</strong>
-                  <small>Goals</small>
-                </div>
-              </div>
-              <div className="ticker" aria-label="Budget metrics">
-                <span>
-                  <strong>+24%</strong>
-                  <small>cashflow</small>
-                </span>
-                <span>
-                  <strong>$420</strong>
-                  <small>projected spare</small>
-                </span>
-                <span>
-                  <strong>4</strong>
-                  <small>subs found</small>
-                </span>
-                <span>
-                  <strong>7d</strong>
-                  <small>bill runway</small>
-                </span>
-              </div>
-            </section>
-          </div>
-        )}
-
-        {showCalendarDetail && page === "dashboard" && user && (
+        {showCalendarDetail && page === "dashboard" && (user || isDemo) && (
           <div
             className="modal-layer calendar-modal-layer"
+            ref={modalRef}
             role="dialog"
             aria-modal="true"
             aria-label={`${currentMonth.monthName} ${selectedDate} money events`}
