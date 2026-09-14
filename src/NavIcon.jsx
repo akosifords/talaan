@@ -1,5 +1,7 @@
 export default function NavIcon({ name }) {
   const paths = {
+    plan: <><rect x="4" y="3" width="16" height="18"/><path d="M8 8h8M8 12h8M8 16h4"/></>,
+    insights: <><path d="M3 3v18h18M7 16l4-6 4 3 6-8"/></>,
     goals: <><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></>,
     more: <><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></>,
     home: <><path d="m3 10 9-7 9 7"/><path d="M5 9v11h5v-6h4v6h5V9"/></>,

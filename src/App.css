@@ -501,7 +501,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
 .event-date{display:grid;place-items:center;gap:2px;width:44px;flex:0 0 44px;padding:7px 0;background:#ded3c1}
 .event-date small{font:10px 'DM Mono',monospace;text-transform:uppercase}
 .event-date b{font-size:21px;font-weight:500}
-.event-name{display:grid;gap:4px}.event-name strong{font-size:14px;font-weight:500}.event-name small{font-size:12px;color:#746957}
+
 .event-row>b{margin-left:auto;font-size:15px;white-space:nowrap;font-weight:500}.income-amount{color:#6b6337}
 .health-panel{padding:22px;background:#e1d7c7}
 .health-reading{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin:20px 0}
@@ -567,7 +567,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
 .ledger-section-heading button{background:none;border:0;font-size:13px;color:#a13927}
 .ledger-event{display:flex;align-items:center;width:100%;gap:12px;border:0;background:#e2d8c8;padding:16px 12px;text-align:left;color:var(--ink);margin-bottom:10px}
 .ledger-date{font:11px 'DM Mono',monospace;flex:0 0 40px}
-.ledger-event>span:nth-child(2){display:grid;gap:6px;min-width:0;flex:1}
+.ledger-event .ledger-event-details{display:grid;gap:6px;min-width:0;flex:1}
 .ledger-event strong{font-size:14px;overflow-wrap:anywhere}
 .ledger-event small{font-size:12px;color:#766751}
 .ledger-event>b{font-size:14px;font-weight:500;overflow-wrap:anywhere;max-width:36%}
@@ -731,3 +731,16 @@ select,.contact-form select,.entry-dialog select,.settings-block select,.schedul
 .donation-return button{border:0;background:transparent;color:#993924;text-decoration:underline}
 .donation-success{border-left:5px solid #596f3f}
 .donation-cancelled{border-left:5px solid #bd3e26}
+
+/* Keep workspace navigation and editor actions within reach. */
+@media(min-width:700px){
+  .ledger-dashboard .dashboard-stage-control{position:sticky;top:100px;bottom:auto;left:auto;right:auto;transform:none;width:100%;max-width:none;margin:0 0 24px;z-index:10}
+  .hero-stage{padding-top:44px;min-height:0}
+  .intro-wordmark{font-size:clamp(88px,9vw,120px);padding-bottom:12px;margin-bottom:24px}
+}
+.event-editor{padding:0;overflow:hidden}
+.event-editor>form{display:flex;flex-direction:column;max-height:90dvh}
+.event-editor-body{overflow-y:auto;min-height:0;padding:24px 20px;scroll-padding-block:20px}
+.event-editor-actions{flex-shrink:0;padding:12px 20px calc(12px + env(safe-area-inset-bottom));border-top:1px solid var(--line);background:#eee9df}
+.event-editor-actions .ledger-delete{min-height:44px;margin-top:4px}
+.ledger-event>b{font-variant-numeric:tabular-nums}

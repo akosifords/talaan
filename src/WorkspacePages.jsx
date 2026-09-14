@@ -1,99 +1,12 @@
 import Backup from "./Backup";
 import { callWorkspaceFunction } from "./data/repositories";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
 const cash = (value) =>
   new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "USD",
   }).format(value);
-
-export function Goals({ workspace }) {
-  const { goals } = workspace;
-  const [form, setForm] = useState(null);
-  const [contribution, setContribution] = useState("");
-  const [busy, setBusy] = useState(false);
-  const dialog = useRef(null);
-  useEffect(() => {
-    if (form && !dialog.current?.open) dialog.current?.showModal();
-  }, [Boolean(form)]);
-
-  async function save(event) {
-    event.preventDefault();
-    const contributionValue = Number(contribution || 0);
-    const goal = {
-      ...form,
-      id: form.id || crypto.randomUUID(),
-      name: form.name.trim(),
-      target: Number(form.target),
-      saved:
-        Math.round((Number(form.saved || 0) + contributionValue) * 100) / 100,
-      contributions: [
-        ...(form.contributions || []),
-        ...(contributionValue > 0
-          ? [{ amount: contributionValue, date: new Date().toISOString().slice(0, 10) }]
-          : []),
-      ],
-    };
-    setBusy(true);
-    try {
-      await workspace.saveGoal(goal);
-      setForm(null);
-      setContribution("");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <>
-      <p className="page-lede">
-        Make room for what matters. Track savings targets at your own pace.
-      </p>
-      <div className="page-toolbar">
-        <span>{goals.length} savings goals</span>
-        <button
-          className="ledger-add"
-          onClick={() => setForm({ name: "", target: "", saved: 0 })}
-        >
-          + New goal
-        </button>
-      </div>
-      <div className="goal-grid">
-        {goals.map((goal) => (
-          <button
-            className="goal-card"
-            key={goal.id}
-            onClick={() => setForm({ ...goal, contributions: goal.contributions || [] })}
-          >
-            <div><span className="goal-mark">↗</span><span>{goal.saved >= goal.target ? "Reached" : "In progress"}</span></div>
-            <h2>{goal.name}</h2>
-            <strong>{cash(goal.saved)}<small> of {cash(goal.target)}</small></strong>
-            <progress value={Math.min(goal.saved, goal.target)} max={goal.target} />
-            <footer><span>{cash(Math.max(0, goal.target - goal.saved))} to go</span><span>Edit goal ›</span></footer>
-          </button>
-        ))}
-      </div>
-      {!goals.length && <p className="ledger-empty">Your next goal starts here.</p>}
-      {form && (
-        <dialog ref={dialog} className="entry-dialog" aria-label="Goal editor">
-          <form onSubmit={save}>
-            <div className="entry-heading">
-              <h2>{form.id ? "Edit goal" : "New goal"}</h2>
-              <button type="button" aria-label="Close goal editor" onClick={() => setForm(null)}>×</button>
-            </div>
-            <label>Goal name<input required maxLength="60" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></label>
-            <label>Target (USD)<input required type="number" min="0.01" step="0.01" value={form.target} onChange={(e) => setForm({ ...form, target: e.target.value })} /></label>
-            <label>Already saved (USD)<input required type="number" min="0" step="0.01" value={form.saved} onChange={(e) => setForm({ ...form, saved: e.target.value })} /></label>
-            {form.id && <label>Add contribution (USD)<input type="number" min="0" step="0.01" value={contribution} onChange={(e) => setContribution(e.target.value)} /></label>}
-            <button className="ledger-save form-save" disabled={busy}>{busy ? "Saving…" : "Save goal"}</button>
-            {form.id && <button className="ledger-delete" type="button" disabled={busy} onClick={async () => { setBusy(true); try { await workspace.deleteGoal(form.id); setForm(null); } finally { setBusy(false); } }}>Remove goal</button>}
-          </form>
-        </dialog>
-      )}
-    </>
-  );
-}
 
 export function Insights({ entries, month, onSchedule }) {
   const rows = entries.filter((entry) => entry.date.startsWith(month));
@@ -180,5 +93,5 @@ export function MorePages({ page, onNavigate, workspace }) {
     </form><Backup workspace={workspace} /></>;
   }
   if (page === "help") return <><p className="page-lede">A little guidance, when you need it.</p><div className="help-list">{[["How do I start?", "Open Schedule and add a payday or expense."], ["Where is my data stored?", workspace.isCloud ? "Your signed-in workspace synchronizes with Firestore in real time." : "This workspace stays in this browser."]].map(([question, answer]) => <details key={question}><summary>{question}<span>+</span></summary><p>{answer}</p></details>)}</div><div className="info-panel"><h2>Need a hand?</h2><SupportForm /></div></>;
-  return <><div className="profile-summary"><div className="profile-avatar">{workspace.profile.name?.[0]?.toUpperCase() || "T"}</div><div><h2>{workspace.profile.name || "Your workspace"}</h2><p>{workspace.isCloud ? "Synced workspace" : "Local workspace"}{workspace.supporter?.active ? " · Supporter" : ""}</p></div></div><div className="more-links">{[["insights", "Insights", "Review your plan"], ["profile", "Profile", "Your name and workspace"], ["settings", "Settings & data", "Guardrails, reminders, and backup"], ["help", "Help & support", "Learn or send a message"]].map(([id, title, description], index) => <button key={id} onClick={() => onNavigate(id)}><span className="more-index">[0{index + 1}]</span><span><strong>{title}</strong><small>{description}</small></span><b>↗</b></button>)}</div></>;
+  return <><div className="profile-summary"><div className="profile-avatar">{workspace.profile.name?.[0]?.toUpperCase() || "T"}</div><div><h2>{workspace.profile.name || "Your workspace"}</h2><p>{workspace.isCloud ? "Synced workspace" : "Local workspace"}{workspace.supporter?.active ? " · Supporter" : ""}</p></div></div><div className="more-links">{[["insights", "Insights", "Review your plan"], ["profile", "Profile", "Your name and workspace"], ["settings", "Settings & data", "Guardrails, reminders, and backup"], ["help", "Help & support", "Learn or send a message"], ["design-review", "Design review", "Inspect screen states"]].map(([id, title, description], index) => <button key={id} onClick={() => onNavigate(id)}><span className="more-index">[0{index + 1}]</span><span><strong>{title}</strong><small>{description}</small></span><b>↗</b></button>)}</div></>;
 }

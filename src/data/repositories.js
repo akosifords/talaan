@@ -72,7 +72,7 @@ export function createLocalRepository(id, seeds = {}) {
   const names = keys(id);
   const read = () => validatedWorkspace({
     entries: parse(names.entries, seeds.entries || []),
-    goals: parse(names.goals, []),
+    goals: parse(names.goals, id === "demo" ? seeds.goals || [] : []),
     profile: parse(names.profile, base.profile),
     settings: parse(names.settings, base.settings),
   });

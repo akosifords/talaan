@@ -1,0 +1,31 @@
+/* Shared primitives used by planning and analysis screens. */
+.planning-caption{color:var(--muted);font-size:13px;line-height:1.65}
+.planning-kicker{font:10px/1.6 'DM Mono',monospace;letter-spacing:.07em;color:#805645}
+.planning-section-head{display:flex;align-items:center;justify-content:space-between;gap:18px;margin-bottom:20px;flex-wrap:wrap}
+.planning-section-head h2{margin:0}
+.planning-studio h2{font-size:25px;line-height:1.2;letter-spacing:-.035em}
+.planning-studio .page-lede{font-size:16px;max-width:420px;margin:0 0 12px}
+.planning-panel{padding:26px;background:#f6f1e8;border:1px solid #d6cdbf;margin-bottom:18px}
+.planning-segments{display:flex;padding:3px;border:1px solid #c9c0b0;gap:3px;flex-wrap:wrap}
+.planning-segments button{border:0;min-height:40px;padding:8px 12px;background:transparent;color:var(--muted);font-size:12px}
+.planning-segments button[aria-pressed=true]{background:#ded3c0;color:#25231f}
+.chart-dates{display:flex;justify-content:space-between;padding-left:54px;font:11px 'DM Mono',monospace;color:var(--muted)}
+.planning-range{display:grid;gap:15px;margin:26px 0;font-size:13px;color:var(--muted)}
+.planning-range>span{display:flex;justify-content:space-between;gap:12px;align-items:center}
+.planning-range strong{color:var(--ink);font-size:18px;font-weight:500}
+.planning-range input{width:100%;accent-color:#a74732;min-height:32px;cursor:pointer}
+.planning-assumptions{font-size:13px;line-height:1.7;color:var(--muted);margin:24px 0}
+.planning-assumptions summary{cursor:pointer;min-height:44px}
+.planning-field{display:grid;gap:8px;font-size:12px;color:var(--muted);margin-top:20px}
+.planning-field input,.planning-field select{width:100%;min-height:44px;border:1px solid #bfb3a0;background:#fffaf1;padding:10px 12px;font-size:16px;color:var(--ink)}
+.planning-presets{display:flex;flex-wrap:wrap;gap:8px;margin:24px 0}
+.planning-presets button{border:1px solid #bfb3a0;background:transparent;padding:12px;min-height:44px;font-size:12px;color:var(--ink)}
+.planning-state{padding:48px 24px;border:1px dashed #bfb3a0;text-align:center}
+.planning-state p{font-size:14px;color:var(--muted);line-height:1.7}
+.planning-skeleton{height:100px;background:linear-gradient(100deg,#ded6c7,#eee7da,#ded6c7);margin-bottom:24px}
+.planning-studio button:focus-visible{outline:2px solid #953d2b;outline-offset:3px}
+@media(max-width:699px){.planning-panel{padding:20px 16px}
+.planning-section-head{gap:10px}
+.planning-studio h2{font-size:23px}
+.planning-presets{gap:6px}
+.planning-studio{padding-bottom:24px}}

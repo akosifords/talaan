@@ -279,7 +279,7 @@ function App() {
   };
 
   return (
-    <main className="shell">
+    <main className={`shell ${["dashboard","personal"].includes(page)||(page==="workspace"&&user)?"workspace-host":""}`}>
       <section className="screen" aria-label="Talaan budgeting app">
         <header className="topbar">
           <button
@@ -332,11 +332,11 @@ function App() {
         </header>
 
         {page === "workspace" && user ? (
-          <Dashboard key={user.uid} user={user} storageId={user.uid} />
+          <Dashboard key={user.uid} user={user} storageId={user.uid} onAccount={handleSignOut} />
         ) : page === "dashboard" ? (
-          <Dashboard key="demo" storageId="demo" />
+          <Dashboard key="demo" storageId="demo" onAccount={openAuth} />
         ) : page === "personal" ? (
-          <Dashboard key="personal" storageId="personal" />
+          <Dashboard key="personal" storageId="personal" onAccount={openAuth} />
         ) : page === "welcome" ? (
           <section className="welcome-page"><h1>Your money.<br/>Your starting point.</h1><p>Try a sample plan or start your own. Everything stays in this browser; no sign-in needed.</p><button className="primary-btn" onClick={()=>setPage('dashboard')}>Explore sample plan</button><button className="secondary-btn" onClick={()=>{if(!localStorage.getItem('talaan-budget-v1-personal'))localStorage.setItem('talaan-budget-v1-personal','[]');if(!localStorage.getItem('talaan-goals-personal'))localStorage.setItem('talaan-goals-personal','[]');setPage('personal');}}>Start / continue my plan</button></section>
         ) : page === "auth" ? (
