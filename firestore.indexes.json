@@ -4,16 +4,78 @@
       "collectionGroup": "recurringRules",
       "queryScope": "COLLECTION_GROUP",
       "fields": [
-        { "fieldPath": "enabled", "order": "ASCENDING" },
-        { "fieldPath": "nextRunAt", "order": "ASCENDING" }
+        {
+          "fieldPath": "enabled",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "nextRunAt",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "events",
       "queryScope": "COLLECTION_GROUP",
       "fields": [
-        { "fieldPath": "reminderSent", "order": "ASCENDING" },
-        { "fieldPath": "reminderAt", "order": "ASCENDING" }
+        {
+          "fieldPath": "reminderSent",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "reminderAt",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "reminderDeliveries",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "uid",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "recurringRules",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        {
+          "fieldPath": "schemaVersion",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "enabled",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "nextRunAt",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "events",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        {
+          "fieldPath": "schemaVersion",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "reminderSent",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "reminderAt",
+          "order": "ASCENDING"
+        }
       ]
     }
   ],

@@ -150,3 +150,11 @@ savings updates, validators, and existing function logic. Browser checks cover
 feature discovery, history, retained trial state, resets, contribution recording,
 keyboard drawers, and responsive layouts. See the final verification record and
 limitations in [DESIGN_PLAN.md](./DESIGN_PLAN.md).
+
+## Backend implementation roadmap
+
+See [BACKEND_IMPLEMENTATION_PLAN.md](./BACKEND_IMPLEMENTATION_PLAN.md) for the proposed
+backend integration of the redesigned screens, including data contracts, migration,
+atomic accounting, phased deliverables, and staging/release gates.
+
+Backend implementation and staging/recovery gates: [BACKEND_RELEASE_RUNBOOK.md](BACKEND_RELEASE_RUNBOOK.md).

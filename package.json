@@ -8,12 +8,14 @@
     "build": "vite build",
     "preview": "vite preview",
     "lint": "eslint .",
-    "test": "node --test test/validators.test.js test/planning.test.js test/workspaceRoutes.test.js && npm --prefix functions test",
+    "test": "node --test test/validators.test.js test/planning.test.js test/workspaceRoutes.test.js test/backend-contracts.test.js && npm --prefix functions test",
     "test:rules": "firebase emulators:exec --only firestore \"node --test test/firestore.rules.test.js\"",
     "test:emulators": "firebase emulators:exec --project demo-talaan --only auth,firestore,functions \"node --test test/emulators.test.js\"",
     "emulators": "firebase emulators:start",
     "functions:install": "npm --prefix functions install",
-    "functions:deploy": "firebase deploy --only functions,firestore"
+    "functions:deploy": "firebase deploy --only functions,firestore",
+    "test:backend": "firebase emulators:exec --project demo-talaan --only firestore \"node --test test/backend-migration.test.js test/firestore.rules.test.js\"",
+    "check:staging": "node scripts/staging-preflight.mjs"
   },
   "dependencies": {
     "firebase": "^12.0.0",

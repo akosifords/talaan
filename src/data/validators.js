@@ -1,11 +1,6 @@
-const DATE = /^\d{4}-\d{2}-\d{2}$/;
-const ID = /^[A-Za-z0-9_-]{1,128}$/;
-const positiveMoney = (value) =>
-  Number.isFinite(value) && value > 0 && value <= 1000000;
-const validDate = (value) =>
-  typeof value === "string" &&
-  DATE.test(value) &&
-  !Number.isNaN(Date.parse(`${value}T00:00:00Z`));
+import { validDate, validId, validMoney, validTimezone, KINDS, FREQUENCIES, LIMITS } from "../../functions/src/domain/workspace.js";
+const ID = { test: validId };
+const positiveMoney = value => validMoney(value, 1);
 
 export function validateEvent(value) {
   if (
@@ -14,18 +9,20 @@ export function validateEvent(value) {
     !ID.test(value.id || "") ||
     typeof value.name !== "string" ||
     !value.name.trim() ||
-    value.name.length > 80 ||
+    value.name.length > LIMITS.name ||
     !positiveMoney(value.amount) ||
     !validDate(value.date) ||
-    !["income", "expense"].includes(value.type) ||
+    !KINDS.includes(value.type) ||
     (value.status && !["planned", "completed"].includes(value.status))
   ) return false;
-  if (value.type === "expense" && typeof value.category !== "string") return false;
+  if (value.category != null && (typeof value.category !== "string" || value.category.length > LIMITS.category)) return false;
+  if (["goalId", "subscriptionId", "categoryId"].some(key => value[key] != null && !validId(value[key]))) return false;
+  if (value.notes != null && (typeof value.notes !== "string" || value.notes.length > 1000)) return false;
   if (value.recurring) {
     const { frequency, interval = 1, endDate } = value.recurring;
-    if (!["weekly", "monthly", "yearly"].includes(frequency)) return false;
-    if (!Number.isInteger(interval) || interval < 1 || interval > 99) return false;
-    if (endDate && !validDate(endDate)) return false;
+    if (!FREQUENCIES.includes(frequency)) return false;
+    if (!Number.isInteger(interval) || interval < 1 || interval > LIMITS.interval) return false;
+    if (endDate && (!validDate(endDate) || endDate < value.date)) return false;
   }
   return true;
 }
@@ -37,13 +34,13 @@ export function validateGoal(value) {
       ID.test(value.id || "") &&
       typeof value.name === "string" &&
       value.name.trim() &&
-      value.name.length <= 60 &&
+      value.name.length <= LIMITS.name &&
       positiveMoney(value.target) &&
-      Number.isFinite(value.saved) &&
+      validMoney(value.saved) &&
       value.saved >= 0 &&
       value.saved <= 1000000 &&
       (!value.contributions ||
-        (Array.isArray(value.contributions) &&
+        (Array.isArray(value.contributions) && value.contributions.length <= LIMITS.history &&
           value.contributions.every(
             (item) => positiveMoney(item.amount) && validDate(item.date),
           )))
@@ -66,7 +63,7 @@ export function validateSettings(value) {
   return (
     (!guardrails.monthlyLimit ||
       positiveMoney(Number(guardrails.monthlyLimit))) &&
-    (!reminders.timezone || typeof reminders.timezone === "string") &&
+    (!reminders.timezone || validTimezone(reminders.timezone)) &&
     (!reminders.hour ||
       (Number.isInteger(Number(reminders.hour)) &&
         Number(reminders.hour) >= 0 &&

@@ -1,3 +1,7 @@
+import { cloudBackupClient } from "./backupClient.js";
+import { localBackend } from "./localBackend.js";
+import { backendState } from "./backendAdapter.js";
+import { assertLegacyWritable, capabilities, validId, validateV2Event } from "../../functions/src/domain/workspace.js";
 import {
   collection,
   deleteField,
@@ -5,6 +9,8 @@ import {
   doc,
   getDocs,
   onSnapshot,
+  query,
+  limit,
   setDoc,
   writeBatch,
 } from "firebase/firestore";
@@ -78,10 +84,26 @@ export function createLocalRepository(id, seeds = {}) {
   });
   const notify = () => window.dispatchEvent(new Event(`talaan:${id}`));
   const write = (field, value) => { localStorage.setItem(names[field], JSON.stringify(value)); notify(); };
+  const strictRead = () => {
+    const readJson = (field,fallback) => { const value=localStorage.getItem(names[field]); return value === null ? fallback : JSON.parse(value); };
+    const raw={entries:readJson('entries',[]),goals:readJson('goals',[]),profile:readJson('profile',base.profile),settings:readJson('settings',base.settings)};
+    if(!Array.isArray(raw.entries)||raw.entries.some(row=>!validateEvent(row))||!Array.isArray(raw.goals)||raw.goals.some(row=>!validateGoal(row))||!validateProfile(raw.profile)||!validateSettings(raw.settings))throw new Error('Local records need reconciliation before upgrade. No records were omitted or changed.');
+    return raw;
+  };
+  const backend = localBackend(id, strictRead);
   return {
     kind: "local",
+    command: value => backend.command(value),
+    upgrade: date => backend.upgrade(date),
+    exportModern: () => backend.export(),
+    restoreModern: value => backend.restore(value),
+    capabilities: capabilities(id === "demo" ? "sample" : "local"),
     subscribe(callback) {
-      const emit = () => callback({ ...base, ...read(), loading: false });
+      const emit = () => {
+        const upgraded = backend.collections();
+        callback({ ...base, ...read(), ...(upgraded ? backendState(upgraded, id) : {}),
+          capabilities: capabilities(id === 'demo' ? 'sample' : 'local', upgraded?.metadata), loading: false });
+      };
       emit(); window.addEventListener(`talaan:${id}`, emit); window.addEventListener("storage", emit);
       return () => { window.removeEventListener(`talaan:${id}`, emit); window.removeEventListener("storage", emit); };
     },
@@ -104,7 +126,7 @@ export function createLocalRepository(id, seeds = {}) {
       Object.entries(names).forEach(([field, key]) => localStorage.setItem(key, JSON.stringify(checked[field])));
       notify();
     },
-    async removeWorkspace() { Object.values(names).forEach((key) => localStorage.removeItem(key)); notify(); },
+    async removeWorkspace() { await backend.remove(); Object.values(names).forEach((key) => localStorage.removeItem(key)); notify(); },
   };
 }
 
@@ -116,55 +138,106 @@ export function createCloudRepository(user) {
   const goals = collection(userRef, "goals").withConverter(goalConverter(uid));
   const rules = collection(userRef, "recurringRules");
   const guardrails = collection(userRef, "guardrails");
+  let currentMetadata = {};
   let currentProfile = base.profile;
   let currentSettings = structuredClone(base.settings);
   return {
     kind: "cloud",
+    upgrade: () => callWorkspaceFunction("enableWorkspace"),
+    command: value => callWorkspaceFunction("workspaceCommand", value),
+    exportModern: () => cloudBackupClient(callWorkspaceFunction, uid).export(),
+    restoreModern: value => cloudBackupClient(callWorkspaceFunction, uid).restore(value),
+    cancelBackup: () => cloudBackupClient(callWorkspaceFunction, uid).cancel(),
+    importModern: value => cloudBackupClient(callWorkspaceFunction, uid).restore(value,true),
     subscribe(callback, fail) {
-      const state = structuredClone(base);
-      const ready = { user: false, events: false, goals: false, rules: false, guardrails: false };
+      let alive = true;
+      let epoch = 0;
+      let sourceKey;
+      let stops = [];
+      let state = structuredClone(base);
+      let ready = new Set();
       let recurring = new Map();
+      let readError;
       const emit = () => {
-        const loading = !Object.values(ready).every(Boolean);
-        const entries = state.entries.map((entry) => recurring.has(entry.id) ? { ...entry, recurring: recurring.get(entry.id) } : entry);
-        callback({ ...state, entries, loading, cloudEmpty: !loading && !entries.length && !state.goals.length });
+        if (!alive) return;
+        if (readError) { fail(readError); return; }
+        const loading = ready.size < 4;
+        const entries = state.entries.map(entry => recurring.has(entry.id) ? { ...entry, recurring: recurring.get(entry.id) } : entry);
+        callback({ ...state, entries, capabilities: capabilities('cloud', currentMetadata), loading,
+          cloudEmpty: !loading && !entries.length && !state.goals.length });
       };
-      const stops = [
-        onSnapshot(userRef, (snapshot) => {
-          const data = snapshot.data() || {};
-          state.profile = { name: data.displayName || "", startPage: data.startPage || "overview" };
-          currentProfile = state.profile;
-          state.settings.reminders = {
-            enabled: Boolean(data.reminderEnabled),
-            timezone: data.timezone || state.settings.reminders.timezone,
-            hour: Number.isInteger(data.reminderHour) ? data.reminderHour : 9,
-            leadDays: Number.isInteger(data.reminderLeadDays)
-              ? data.reminderLeadDays
-              : 3,
-          };
-          currentSettings = structuredClone(state.settings);
-          state.supporter = data.supporter || { active: Boolean(data.supporterSince) };
-          ready.user = true; emit();
-        }, fail),
-        onSnapshot(events, (snapshot) => { state.entries = snapshot.docs.map((item) => item.data()).filter(validateEvent); ready.events = true; emit(); }, fail),
-        onSnapshot(goals, (snapshot) => { state.goals = snapshot.docs.map((item) => item.data()).filter(validateGoal); ready.goals = true; emit(); }, fail),
-        onSnapshot(rules, (snapshot) => {
-          recurring = new Map(snapshot.docs.map((item) => {
-            const value = item.data();
-            return [item.id, { frequency: value.frequency, interval: value.interval, ...(value.endAt ? { endDate: toDateKey(value.endAt) } : {}) }];
-          }));
-          ready.rules = true; emit();
-        }, fail),
-        onSnapshot(guardrails, (snapshot) => {
-          const item = snapshot.docs[0]?.data();
-          state.settings.guardrails = item ? { enabled: item.enabled, monthlyLimit: toDollars(item.limitCents) } : { enabled: false, monthlyLimit: "" };
-          currentSettings = structuredClone(state.settings);
-          ready.guardrails = true; emit();
-        }, fail),
-      ];
-      return () => stops.forEach((stop) => stop());
+      const reject = error => { readError=error; if (alive) fail(error); };
+      const stopProfile = onSnapshot(userRef, snapshot => {
+        if (!alive) return;
+        const data = snapshot.data() || {};
+        currentMetadata = data;
+        const version = data.schemaVersion ?? 1;
+        if (![1, 2].includes(version) || (version === 2 && (!validId(data.activeWorkspaceVersion) || data.migration?.status !== 'ready'))) {
+          epoch++; stops.forEach(stop => stop()); stops = [];
+          state = structuredClone(base); ready = new Set(); emit();
+          reject(new Error('This workspace version is unsupported or not ready. Update the app or retry later.')); return;
+        }
+        const key = version === 2 ? `${data.activeWorkspaceVersion}:${data.workspaceRevision || 0}` : 'legacy';
+        if (key !== sourceKey) {
+          // Keep mounted editors and their drafts while refreshing the same generation.
+          // Account/generation changes still clear the old workspace immediately.
+          const sameGeneration = version === 2 && sourceKey?.startsWith(`${data.activeWorkspaceVersion}:`) && ready.size === 4;
+          epoch++; stops.forEach(stop => stop()); stops = [];
+          if (!sameGeneration) { state = structuredClone(base); ready = new Set(); recurring = new Map(); }
+          sourceKey = key;
+          const root = userRef;
+          const token = epoch;
+          if (version === 2) {
+            callWorkspaceFunction('loadWorkspace').then(result => {
+              if (!alive || token !== epoch) return;
+              state = { ...state, ...backendState(result, uid) };
+              ready = new Set(['events','goals','recurringRules','guardrails']); emit();
+            }).catch(error => { if (alive && token === epoch) reject(error); });
+          }
+
+          for (const name of version === 2 ? [] : ['events', 'goals', 'recurringRules', 'guardrails']) {
+            stops.push(onSnapshot(query(collection(root, name), limit(241)), rows => {
+              if (!alive || token !== epoch) return;
+              try {
+                if (rows.size > 240) throw new Error('This workspace exceeds the current reader limit. No partial totals are displayed.');
+                if (name === 'events' || name === 'goals') {
+                  const converter = name === 'events' ? eventConverter(uid) : goalConverter(uid);
+                  const validate = name === 'events' ? validateEvent : validateGoal;
+                  const records = rows.docs.map(item => {
+                    const raw = item.data();
+                    if (version === 2 && (raw.schemaVersion !== 2 || (name === 'events' && !validateV2Event({ ...raw, id: item.id })))) throw new Error('A workspace record needs reconciliation.');
+                    const record = converter.fromFirestore(item);
+                    if (!validate(record)) throw new Error('A workspace record is invalid. No partial totals are displayed.');
+                    return record;
+                  });
+                  state[name === 'events' ? 'entries' : 'goals'] = records;
+                } else if (name === 'recurringRules') {
+                  recurring = new Map(rows.docs.map(item => {
+                    const rule = item.data();
+                    return [item.id, { frequency: rule.frequency, interval: rule.interval, ...(rule.endAt ? { endDate: toDateKey(rule.endAt) } : {}) }];
+                  }));
+                } else {
+                  const item = rows.docs[0]?.data();
+                  state.settings.guardrails = item ? { enabled: item.enabled, monthlyLimit: toDollars(item.limitCents) } : { enabled: false, monthlyLimit: '' };
+                  currentSettings = structuredClone(state.settings);
+                }
+                ready.add(name); emit();
+              } catch (error) { reject(error); }
+            }, reject));
+          }
+        }
+        state.profile = { name: data.displayName || '', startPage: data.startPage || 'overview' };
+        currentProfile = state.profile;
+        state.settings.reminders = { enabled: Boolean(data.reminderEnabled), timezone: data.timezone || state.settings.reminders.timezone,
+          hour: data.reminderHour ?? 9, leadDays: data.reminderLeadDays ?? 3 };
+        currentSettings = structuredClone(state.settings);
+        state.supporter = data.supporter || { active: Boolean(data.supporterSince) };
+        emit();
+      }, reject);
+      return () => { alive = false; epoch++; stopProfile(); stops.forEach(stop => stop()); };
     },
     async saveEvent(value) {
+      assertLegacyWritable(currentMetadata);
       if (!validateEvent(value)) throw new Error("Check the event fields.");
       const batch = writeBatch(db);
       batch.set(
@@ -178,11 +251,13 @@ export function createCloudRepository(user) {
       await batch.commit();
     },
     async deleteEvent(id) {
+      assertLegacyWritable(currentMetadata);
       const batch = writeBatch(db); batch.delete(doc(events, id)); batch.delete(doc(rules, id)); await batch.commit();
     },
-    async saveGoal(value) { await setDoc(doc(goals, value.id), value, { merge: true }); },
-    async deleteGoal(id) { await deleteDoc(doc(goals, id)); },
+    async saveGoal(value) { assertLegacyWritable(currentMetadata); await setDoc(doc(goals, value.id), value, { merge: true }); },
+    async deleteGoal(id) { assertLegacyWritable(currentMetadata); await deleteDoc(doc(goals, id)); },
     async saveProfile(profile) {
+      assertLegacyWritable(currentMetadata);
       if (!validateProfile(profile)) throw new Error("Check the profile.");
       await setDoc(
         userRef,
@@ -197,6 +272,7 @@ export function createCloudRepository(user) {
       );
     },
     async saveSettings(settings) {
+      assertLegacyWritable(currentMetadata);
       if (!validateSettings(settings)) throw new Error("Check settings.");
       await setDoc(
         userRef,
@@ -232,6 +308,7 @@ export function createCloudRepository(user) {
       }
     },
     async migrate(value) {
+      assertLegacyWritable(currentMetadata);
       const checked = validatedWorkspace(value);
       const recurringCount = checked.entries.filter(
         (item) => item.recurring?.frequency,

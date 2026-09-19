@@ -1,3 +1,5 @@
+> The v2 backend implementation supersedes the legacy collection/write model below. See [BACKEND_IMPLEMENTATION_PLAN.md](BACKEND_IMPLEMENTATION_PLAN.md) and [BACKEND_RELEASE_RUNBOOK.md](BACKEND_RELEASE_RUNBOOK.md) for active generations, commands, backup jobs, and rollout gates. Legacy clients remain supported before migration.
+
 # Backend rollout
 
 This document records the backend work introduced on the

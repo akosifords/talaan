@@ -1,3 +1,4 @@
+import { validateBackup } from "./data/backupClient";
 import { validBackup } from "./backupData.mjs";
 import { useState } from "react";
 
@@ -58,12 +59,13 @@ export default function Backup({ workspace }) {
     setError(""); setPending(null); setStatus("");
     if (!file) return;
     try {
-      if (file.size > 5000000) throw new Error();
+      if (file.size > 20000000) throw new Error();
       const data = JSON.parse(await file.text());
-      if (!(workspace.isCloud ? validCloudBackup(data) : validBackup(data))) throw new Error();
+      if (workspace.capabilities?.schemaVersion===2) await validateBackup(data);
+      else if (!(workspace.isCloud ? validCloudBackup(data) : validBackup(data))) throw new Error();
       setPending(data);
     } catch {
-      setError(`Choose a valid Talaan ${workspace.isCloud ? "cloud" : "local"} backup, smaller than 5 MB.`);
+      setError(`Choose a valid Talaan ${workspace.isCloud ? "cloud" : "local"} backup, smaller than 20 MB.`);
     }
   }
 
@@ -73,8 +75,8 @@ export default function Backup({ workspace }) {
       await workspace.restore(pending);
       setPending(null);
       setStatus("Backup restored successfully.");
-    } catch {
-      setError("Restore failed. Your current workspace was not replaced.");
+    } catch (reason) {
+      setError(`${reason.message || "Restore interrupted."} Retry this backup to resume, or cancel the pending operation. Your current workspace stays intact until activation.`);
     } finally {
       setBusy(false);
     }
@@ -93,5 +95,5 @@ export default function Backup({ workspace }) {
     }
   }
 
-  return <section className="settings-block" aria-busy={busy}><h2>Backup & restore</h2><p>{workspace.isCloud ? "Cloud exports, restores, and deletion are processed securely by the backend." : "A full backup includes this local workspace."}</p><button className="ledger-add" disabled={busy} onClick={exportData}>{busy ? "Working…" : "Download full backup"}</button><label className="restore-label">Restore a backup<input type="file" accept="application/json,.json" disabled={busy} onChange={(event) => read(event.target.files[0])} /></label>{error && <p role="alert">{error}</p>}{status && <p role="status">{status}</p>}{pending && <div className="info-panel"><h3>Review before restoring</h3><p>{pending.entries.length} events · {pending.goals.length} goals</p><p>This replaces this workspace’s data.</p><button className="ledger-add" disabled={busy} onClick={restore}>Replace with this backup</button><button className="text-action" onClick={() => setPending(null)}>Cancel</button></div>}<div className="danger-zone"><h3>Delete workspace</h3><p>This cannot be undone. Download a backup first if needed.</p><button className="ledger-delete" type="button" disabled={busy} onClick={remove}>Delete all workspace data</button></div></section>;
+  return <section className="settings-block" aria-busy={busy}><h2>Backup & restore</h2><p>{workspace.isCloud ? "Cloud exports, restores, and deletion are processed securely by the backend." : "A full backup includes this local workspace."}</p><button className="ledger-add" disabled={busy} onClick={exportData}>{busy ? "Working…" : "Download full backup"}</button><label className="restore-label">Restore a backup<input type="file" accept="application/json,.json" disabled={busy} onChange={(event) => read(event.target.files[0])} /></label>{error && <><p role="alert">{error}</p>{workspace.isCloud&&<button className="text-action" onClick={async()=>{try{await workspace.cancelBackup();setError("");setStatus("Pending operation cancelled.");}catch(reason){setError(reason.message);}}}>Cancel pending backup operation</button>}</>}{status && <p role="status">{status}</p>}{pending && <div className="info-panel"><h3>Review before restoring</h3><p>{pending.manifest?.recordCount ?? ((pending.entries?.length || pending.events?.length || 0)+(pending.goals?.length||0))} records</p><p>This replaces this workspace’s data.</p><button className="ledger-add" disabled={busy} onClick={restore}>Replace with this backup</button><button className="text-action" onClick={() => setPending(null)}>Cancel</button></div>}<div className="danger-zone"><h3>Delete workspace</h3><p>This cannot be undone. Download a backup first if needed.</p><button className="ledger-delete" type="button" disabled={busy} onClick={remove}>Delete all workspace data</button></div></section>;
 }

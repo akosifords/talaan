@@ -1,3 +1,7 @@
+import { rescheduleReminders } from './rescheduleReminders.js';
+import { scheduledPage } from './schedulerPage.js';
+import { deleteWorkspaceData } from './deleteWorkspace.js';
+import { deliverReminder } from './reminderDelivery.js';
 import { initializeApp } from "firebase-admin/app";
 import {
   FieldValue,
@@ -22,7 +26,8 @@ import {
   validateRestoreBackup,
   validateWorkspaceDocument,
 } from "./validation.js";
-import { dueOccurrences, occurrenceId } from "./recurrence.js";
+import { generateRule } from "./scheduleGeneration.js";
+import { assertLegacyWritable, validTimezone } from "./domain/workspace.js";
 import { safeEventId, verifyResendSignature } from "./idempotency.js";
 
 initializeApp();
@@ -108,6 +113,9 @@ export const exportWorkspace = onCall(CALLABLE_OPTIONS, async (request) => {
     owner.get(),
     ...WORKSPACE_COLLECTIONS.map((name) => owner.collection(name).get()),
   ]);
+  if ((profile.get("schemaVersion") ?? 1) !== 1 || profile.get("migration.status") === "copying") {
+    throw new HttpsError("failed-precondition", "Version 2 export is not enabled yet. The migration backup is retained securely.");
+  }
   const count = snapshots.reduce((total, snapshot) => total + snapshot.size, 0);
   if (count > LIMITS.exportDocuments) {
     throw new HttpsError(
@@ -145,8 +153,11 @@ export const restoreWorkspace = onCall(CALLABLE_OPTIONS, async (request) => {
   );
   const profile = input.backup?.profile;
   const owner = userRef(uid);
+  return db.runTransaction(async batch => {
+  const ownerSnapshot = await batch.get(owner);
+  try { assertLegacyWritable(ownerSnapshot.data()); } catch (error) { throw new HttpsError(error.code, error.message); }
   const existing = await Promise.all(
-    WORKSPACE_COLLECTIONS.map((name) => owner.collection(name).get()),
+    WORKSPACE_COLLECTIONS.map((name) => batch.get(owner.collection(name))),
   );
   const existingCount = existing.reduce(
     (total, snapshot) => total + snapshot.size,
@@ -160,7 +171,6 @@ export const restoreWorkspace = onCall(CALLABLE_OPTIONS, async (request) => {
       "Workspace replacement exceeds Firestore's 500-write atomic limit.",
     );
   }
-  const batch = db.batch();
   existing.forEach((snapshot) => {
     snapshot.docs.forEach((document) => batch.delete(document.ref));
   });
@@ -196,7 +206,7 @@ export const restoreWorkspace = onCall(CALLABLE_OPTIONS, async (request) => {
       throw new HttpsError("invalid-argument", "profile.currency must be usd.");
     }
     if (restored.timezone !== undefined) {
-      cleanString(restored.timezone, "profile.timezone", { max: 64 });
+      if(!validTimezone(restored.timezone))throw new HttpsError("invalid-argument", "profile.timezone is invalid.");
     }
     if (
       restored.startPage !== undefined &&
@@ -234,26 +244,14 @@ export const restoreWorkspace = onCall(CALLABLE_OPTIONS, async (request) => {
     }
     batch.set(owner, { ...restored, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
   }
-  await batch.commit();
   return { restored: restoredCount };
+  });
 });
 
 export const deleteAccount = onCall(CALLABLE_OPTIONS, async (request) => {
   const uid = requireAuth(request);
-  const related = await Promise.all(
-    ["donations", "supportRequests", "reminderDeliveries"].map((collection) =>
-      db.collection(collection).where("uid", "==", uid).get()
-    ),
-  );
-  const writer = db.bulkWriter();
-  related.forEach((snapshot) => {
-    snapshot.docs.forEach((document) => writer.delete(document.ref));
-  });
-  writer.delete(db.collection("rateLimits").doc(`donation_${uid}`));
-  writer.delete(db.collection("rateLimits").doc(`support_${uid}`));
-  await writer.close();
-  await db.recursiveDelete(userRef(uid));
-  await getAuth().deleteUser(uid);
+  await deleteWorkspaceData(db, uid);
+  try { await getAuth().deleteUser(uid); } catch(error) { if(error.code!=="auth/user-not-found")throw error; }
   return { deleted: true };
 });
 
@@ -535,49 +533,13 @@ export const processSchedules = onSchedule(
     const generationHorizon = Timestamp.fromMillis(
       now.toMillis() + 31 * 24 * 60 * 60_000,
     );
-    const rules = await db.collectionGroup("recurringRules")
-      .where("enabled", "==", true)
-      .where("nextRunAt", "<=", generationHorizon)
-      .limit(100)
-      .get();
+    const rules = await scheduledPage(db, 'recurringRules', 'enabled', 'nextRunAt', generationHorizon);
 
     for (const snapshot of rules.docs) {
       const owner = snapshot.ref.parent.parent;
       if (!owner) continue;
-      const rule = snapshot.data();
       try {
-        const result = dueOccurrences(rule, generationHorizon.toDate(), 50);
-        const batch = db.batch();
-        for (const occurrence of result.occurrences) {
-          const event = owner.collection("events")
-            .doc(occurrenceId(snapshot.id, occurrence));
-          const reminder = Number.isInteger(rule.reminderMinutesBefore)
-            ? {
-                reminderAt: Timestamp.fromMillis(
-                  occurrence.getTime() - rule.reminderMinutesBefore * 60_000,
-                ),
-                reminderSent: false,
-              }
-            : {};
-          batch.set(event, {
-            ...assertPlainObject(rule.event, "recurring rule event"),
-            ...reminder,
-            ownerId: owner.id,
-            recurringRuleId: snapshot.id,
-            occurrenceAt: Timestamp.fromDate(occurrence),
-            date: Timestamp.fromDate(occurrence),
-            createdAt: FieldValue.serverTimestamp(),
-            updatedAt: FieldValue.serverTimestamp(),
-          }, { merge: false });
-        }
-        batch.update(snapshot.ref, {
-          nextRunAt: Timestamp.fromDate(result.nextRunAt),
-          anchorDay: result.anchorDay,
-          anchorMonth: result.anchorMonth,
-          enabled: !result.exhausted,
-          updatedAt: FieldValue.serverTimestamp(),
-        });
-        await batch.commit();
+        await generateRule(db, snapshot.ref, generationHorizon.toDate());
       } catch (error) {
         logger.error("Recurring rule processing failed", {
           path: snapshot.ref.path,
@@ -586,90 +548,21 @@ export const processSchedules = onSchedule(
       }
     }
 
-    const reminders = await db.collectionGroup("events")
-      .where("reminderSent", "==", false)
-      .where("reminderAt", "<=", now)
-      .limit(100)
-      .get();
+    const reschedules=await db.collection('users').where('reminderReschedule','==',true).limit(50).get();
+    for(const profile of reschedules.docs){try{await rescheduleReminders(db,profile.ref);}catch{logger.warn('workspace.reminder-reschedule',{outcome:'failed'});}}
+    const reminders = await scheduledPage(db, 'events', 'reminderSent', 'reminderAt', now);
     const resend = new Resend(RESEND_API_KEY.value());
     for (const eventSnapshot of reminders.docs) {
-      const owner = eventSnapshot.ref.parent.parent;
-      if (!owner) continue;
-      const event = eventSnapshot.data();
-      const delivery = db.collection("reminderDeliveries")
-        .doc(`${owner.id}_${eventSnapshot.id}`);
-      const claimed = await db.runTransaction(async (transaction) => {
-        const existing = await transaction.get(delivery);
-        const leaseUntil = existing.get("leaseUntil");
-        if (
-          existing.exists &&
-          (
-            ["sent", "suppressed"].includes(existing.get("status")) ||
-            (
-              existing.get("status") === "processing" &&
-              leaseUntil?.toMillis() > now.toMillis()
-            )
-          )
-        ) {
-          return false;
-        }
-        transaction.set(delivery, {
-          uid: owner.id,
-          eventId: eventSnapshot.id,
-          status: "processing",
-          leaseUntil: Timestamp.fromMillis(now.toMillis() + 5 * 60_000),
-          updatedAt: FieldValue.serverTimestamp(),
-        }, { merge: true });
-        return true;
-      });
-      if (!claimed) continue;
       try {
-        const user = await owner.get();
-        const data = user.data() ?? {};
-        if (!data.email || data.emailSuppressed) {
-          await Promise.all([
-            delivery.update({
-              status: "suppressed",
-              leaseUntil: null,
-              updatedAt: FieldValue.serverTimestamp(),
-            }),
-            eventSnapshot.ref.update({
-              reminderSent: true,
-              reminderSentAt: FieldValue.serverTimestamp(),
-            }),
-          ]);
-          continue;
-        }
-        const { error } = await resend.emails.send(
-          {
-            from: RESEND_FROM_EMAIL.value(),
-            to: data.email,
-            subject: `Reminder: ${event.name}`,
-            text: `${event.name} is scheduled for ${event.date.toDate().toISOString()}.`,
-          },
-          { idempotencyKey: delivery.id },
-        );
-        if (error) throw new Error(error.message);
-        await Promise.all([
-          delivery.update({
-            status: "sent",
-            leaseUntil: null,
-            sentAt: FieldValue.serverTimestamp(),
-          }),
-          eventSnapshot.ref.update({
-            reminderSent: true,
-            reminderSentAt: FieldValue.serverTimestamp(),
-          }),
-        ]);
-      } catch (error) {
-        await delivery.update({
-          status: "failed",
-          leaseUntil: null,
-          error: String(error).slice(0, 500),
-          updatedAt: FieldValue.serverTimestamp(),
+        await deliverReminder(db, eventSnapshot.ref, now, async ({ key, email, name, date }) => {
+          const { error } = await resend.emails.send({ from: RESEND_FROM_EMAIL.value(), to: email,
+            subject: `Reminder: ${name}`, text: `${name} is scheduled for ${date}.` }, { idempotencyKey: key });
+          if (error) throw new Error(error.message);
         });
-        logger.error("Reminder delivery failed", error);
-      }
+      } catch { logger.warn('workspace.reminder', { outcome: 'failed' }); }
     }
+    logger.info('workspace.scheduler', { rulesScanned: rules.size, remindersScanned: reminders.size, generationBatchFull: rules.batchFull, reminderBatchFull: reminders.batchFull });
   },
 );
+
+export { workspaceCommand, loadWorkspace, workspaceBackup, enableWorkspace } from './backendCallables.js';

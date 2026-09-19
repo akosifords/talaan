@@ -1,3 +1,4 @@
+import { validDate, validId } from "./domain/workspace.js";
 import { HttpsError } from "firebase-functions/v2/https";
 
 export const LIMITS = Object.freeze({
@@ -121,7 +122,7 @@ function decodeDates(value) {
     }
     return Object.fromEntries(
       Object.entries(value).map(([key, child]) => {
-        if (DATE_FIELDS.has(key) && typeof child === "string") {
+        if (DATE_FIELDS.has(key) && typeof child === "string" && !(key === "date" && validDate(child))) {
           const date = new Date(child);
           if (!Number.isNaN(date.getTime())) return [key, date];
         }
@@ -170,11 +171,14 @@ export function validateWorkspaceDocument(collection, value) {
     assertAllowedKeys(data, [
       ...common, "name", "type", "amountCents", "currency", "category", "date",
       "status", "notes", "reminderAt", "reminderSent", "reminderSentAt",
-      "recurringRuleId", "occurrenceAt",
+      "recurringRuleId", "occurrenceAt", "goalId", "subscriptionId", "categoryId",
     ], "event");
     cleanString(data.name, "event.name", { max: 100 });
     if (!["income", "expense", "saving"].includes(data.type)) {
       throw new HttpsError("invalid-argument", "event.type is invalid.");
+    }
+    for (const key of ["goalId", "subscriptionId", "categoryId", "recurringRuleId"]) {
+      if (data[key] != null && !validId(data[key])) throw new HttpsError("invalid-argument", `Invalid ${key}.`);
     }
     integerCents(data.amountCents);
     if (data.currency !== "usd") {
@@ -203,7 +207,7 @@ export function validateWorkspaceDocument(collection, value) {
     cleanString(data.name, "goal.name", { max: 100 });
     integerCents(data.targetCents);
     integerCents(data.currentCents, { min: 0 });
-    if (data.currentCents > data.targetCents || data.currency !== "usd") {
+    if (data.currency !== "usd") {
       throw new HttpsError("invalid-argument", "goal amounts or currency are invalid.");
     }
     if (!["active", "completed", "archived"].includes(data.status)) {
@@ -228,9 +232,7 @@ export function validateWorkspaceDocument(collection, value) {
         );
         integerCents(item.amountCents);
         if (
-          typeof item.date !== "string" ||
-          !/^\d{4}-\d{2}-\d{2}$/.test(item.date) ||
-          Number.isNaN(Date.parse(`${item.date}T00:00:00Z`))
+          !validDate(item.date)
         ) {
           throw new HttpsError(
             "invalid-argument",

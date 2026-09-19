@@ -26,6 +26,16 @@ service cloud.firestore {
       return value is int && value >= 0 && value <= 100000000;
     }
 
+    function optionalId(data, field) {
+      return !(field in data) || data[field] == null || (data[field] is string && data[field].matches('^[A-Za-z0-9_-]{1,128}$'));
+    }
+
+    function legacyWritable(uid) {
+      let path = /databases/$(database)/documents/users/$(uid);
+      return !exists(path) || (get(path).data.get('schemaVersion', 1) == 1 && !('workspaceLock' in get(path).data)
+        && get(path).data.get('migration', {}).get('status', '') != 'copying');
+    }
+
     function optionalTimestamp(data, field) {
       return !(field in data) || data[field] == null || data[field] is timestamp;
     }
@@ -40,7 +50,8 @@ service cloud.firestore {
       }
 
       function validProfile(data) {
-        return data.currency == 'usd'
+        return (!('displayName' in data) || (data.displayName is string && data.displayName.size() <= 60))
+          && data.currency == 'usd'
           && validText(data.timezone, 64)
           && data.startPage in ['overview', 'schedule', 'goals']
           && (!('reminderEnabled' in data) || data.reminderEnabled is bool)
@@ -54,14 +65,14 @@ service cloud.firestore {
 
       allow get: if owns(uid);
       allow list: if false;
-      allow create: if owns(uid)
+      allow create: if owns(uid) && legacyWritable(uid)
         && request.resource.data.keys().hasOnly(clientProfileFields())
         && validOwner(uid, request.resource.data)
         && request.resource.data.email == request.auth.token.email
         && validProfile(request.resource.data)
         && optionalTimestamp(request.resource.data, 'createdAt')
         && optionalTimestamp(request.resource.data, 'updatedAt');
-      allow update: if owns(uid)
+      allow update: if owns(uid) && legacyWritable(uid)
         && request.resource.data.diff(resource.data).affectedKeys()
           .hasOnly(clientProfileFields())
         && !request.resource.data.diff(resource.data).affectedKeys()
@@ -73,13 +84,22 @@ service cloud.firestore {
       // Account deletion is recursive and must run through the callable function.
       allow delete: if false;
 
+      // Only verified active generations are client-readable. B3 owns all v2 writes.
+      match /workspaceVersions/{version}/{collection}/{record} {
+        allow read: if owns(uid)
+          && get(/databases/$(database)/documents/users/$(uid)).data.get('schemaVersion', 1) == 2
+          && get(/databases/$(database)/documents/users/$(uid)).data.get('activeWorkspaceVersion', '') == version
+          && collection in ['events', 'goals', 'categories', 'recurringRules', 'guardrails', 'cashCheckpoints', 'budgets', 'scenarios', 'subscriptions', 'goalPlans', 'adjustments', 'preferences'];
+        allow write: if false;
+      }
+
       match /events/{eventId} {
         function fields() {
           return [
             'ownerId', 'name', 'type', 'amountCents', 'currency', 'category',
             'date', 'status', 'notes', 'reminderAt', 'reminderSent',
             'recurringRuleId', 'occurrenceAt', 'reminderSentAt', 'createdAt',
-            'updatedAt'
+            'updatedAt', 'goalId', 'subscriptionId', 'categoryId'
           ];
         }
 
@@ -90,6 +110,7 @@ service cloud.firestore {
             && validCents(data.amountCents) && data.amountCents > 0
             && data.currency == 'usd'
             && validText(data.category, 60)
+            && optionalId(data, 'goalId') && optionalId(data, 'subscriptionId') && optionalId(data, 'categoryId')
             && data.date is timestamp
             && (!('status' in data)
               || data.status in ['planned', 'completed'])
@@ -104,7 +125,7 @@ service cloud.firestore {
         }
 
         allow read: if owns(uid);
-        allow create: if owns(uid) && eventId.size() > 0 && eventId.size() <= 128
+        allow create: if owns(uid) && legacyWritable(uid) && eventId.size() > 0 && eventId.size() <= 128
           && validOwner(uid, request.resource.data)
           && !request.resource.data.keys().hasAny([
             'recurringRuleId', 'occurrenceAt', 'reminderSentAt'
@@ -112,7 +133,7 @@ service cloud.firestore {
           && (!('reminderSent' in request.resource.data)
             || request.resource.data.reminderSent == false)
           && valid(request.resource.data);
-        allow update: if owns(uid) && immutableOwner(uid)
+        allow update: if owns(uid) && legacyWritable(uid) && immutableOwner(uid)
           && !request.resource.data.diff(resource.data).affectedKeys()
             .hasAny([
               'ownerId', 'createdAt', 'recurringRuleId', 'occurrenceAt',
@@ -121,7 +142,7 @@ service cloud.firestore {
           && (!request.resource.data.diff(resource.data).affectedKeys()
             .hasAny(['reminderSent']) || request.resource.data.reminderSent == false)
           && valid(request.resource.data);
-        allow delete: if owns(uid);
+        allow delete: if owns(uid) && legacyWritable(uid);
       }
 
       match /goals/{goalId} {
@@ -138,7 +159,6 @@ service cloud.firestore {
             && validText(data.name, 100)
             && validCents(data.targetCents) && data.targetCents > 0
             && validCents(data.currentCents)
-            && data.currentCents <= data.targetCents
             && data.currency == 'usd'
             && data.status in ['active', 'completed', 'archived']
             && (!('contributions' in data)
@@ -151,14 +171,14 @@ service cloud.firestore {
         }
 
         allow read: if owns(uid);
-        allow create: if owns(uid) && goalId.size() > 0 && goalId.size() <= 128
+        allow create: if owns(uid) && legacyWritable(uid) && goalId.size() > 0 && goalId.size() <= 128
           && validOwner(uid, request.resource.data)
           && valid(request.resource.data);
-        allow update: if owns(uid) && immutableOwner(uid)
+        allow update: if owns(uid) && legacyWritable(uid) && immutableOwner(uid)
           && !request.resource.data.diff(resource.data).affectedKeys()
             .hasAny(['ownerId', 'createdAt'])
           && valid(request.resource.data);
-        allow delete: if owns(uid);
+        allow delete: if owns(uid) && legacyWritable(uid);
       }
 
       match /recurringRules/{ruleId} {
@@ -177,7 +197,7 @@ service cloud.firestore {
             ])
             && validText(event.name, 100)
             && event.type in ['income', 'expense', 'saving']
-            && validCents(event.amountCents)
+            && validCents(event.amountCents) && event.amountCents > 0
             && event.currency == 'usd'
             && validText(event.category, 60)
             && (!('notes' in event)
@@ -206,14 +226,14 @@ service cloud.firestore {
         }
 
         allow read: if owns(uid);
-        allow create: if owns(uid) && ruleId.size() > 0 && ruleId.size() <= 128
+        allow create: if owns(uid) && legacyWritable(uid) && ruleId.size() > 0 && ruleId.size() <= 128
           && validOwner(uid, request.resource.data)
           && valid(request.resource.data);
-        allow update: if owns(uid) && immutableOwner(uid)
+        allow update: if owns(uid) && legacyWritable(uid) && immutableOwner(uid)
           && !request.resource.data.diff(resource.data).affectedKeys()
             .hasAny(['ownerId', 'createdAt'])
           && valid(request.resource.data);
-        allow delete: if owns(uid);
+        allow delete: if owns(uid) && legacyWritable(uid);
       }
 
       match /guardrails/{guardrailId} {
@@ -238,15 +258,15 @@ service cloud.firestore {
         }
 
         allow read: if owns(uid);
-        allow create: if owns(uid)
+        allow create: if owns(uid) && legacyWritable(uid)
           && guardrailId.size() > 0 && guardrailId.size() <= 128
           && validOwner(uid, request.resource.data)
           && valid(request.resource.data);
-        allow update: if owns(uid) && immutableOwner(uid)
+        allow update: if owns(uid) && legacyWritable(uid) && immutableOwner(uid)
           && !request.resource.data.diff(resource.data).affectedKeys()
             .hasAny(['ownerId', 'createdAt'])
           && valid(request.resource.data);
-        allow delete: if owns(uid);
+        allow delete: if owns(uid) && legacyWritable(uid);
       }
     }
 

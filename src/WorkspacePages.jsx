@@ -11,9 +11,9 @@ const cash = (value) =>
 export function Insights({ entries, month, onSchedule }) {
   const rows = entries.filter((entry) => entry.date.startsWith(month));
   const income = rows.filter((entry) => entry.type === "income").reduce((sum, entry) => sum + entry.amount, 0);
-  const expense = rows.filter((entry) => entry.type === "expense").reduce((sum, entry) => sum + entry.amount, 0);
+  const expense = rows.filter((entry) => entry.type !== "income").reduce((sum, entry) => sum + entry.amount, 0);
   const groups = Object.entries(
-    rows.filter((entry) => entry.type === "expense").reduce(
+    rows.filter((entry) => entry.type !== "income").reduce(
       (result, entry) => ({
         ...result,
         [entry.category || "Uncategorized"]:

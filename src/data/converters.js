@@ -1,7 +1,8 @@
 import { Timestamp, serverTimestamp } from "firebase/firestore";
-import { validateEvent, validateGoal } from "./validators";
+import { validateEvent, validateGoal } from "./validators.js";
 
-const toCents = (value) => Math.round(Number(value) * 100);
+import { toCents } from "../../functions/src/domain/workspace.js";
+import { nextOccurrence } from "../../functions/src/recurrence.js";
 const toDollars = (value) => Number(value || 0) / 100;
 const toTimestamp = (date) => Timestamp.fromDate(new Date(`${date}T12:00:00Z`));
 const toDateKey = (value) =>
@@ -18,7 +19,9 @@ export const eventConverter = (uid) => ({
       currency: "usd",
       category: event.category || "Uncategorized",
       date: toTimestamp(event.date),
-      ...(event.status === "completed" ? { status: "completed" } : {}),
+      status: event.status || "planned",
+      notes: event.notes || "",
+      ...Object.fromEntries(["goalId", "subscriptionId", "categoryId"].filter(key => event[key] !== undefined).map(key => [key, event[key]])),
       reminderAt: event.reminderAt || null,
       reminderSent: false,
       updatedAt: serverTimestamp(),
@@ -32,7 +35,8 @@ export const eventConverter = (uid) => ({
       amount: toDollars(data.amountCents),
       type: data.type,
       category: data.category || "",
-      date: toDateKey(data.date),
+      date: data.localDate || toDateKey(data.date),
+      ...Object.fromEntries(["goalId", "subscriptionId", "categoryId", "revision", "recurringRuleId", "notes", "subscriptionId", "recurring", "legacyIncludedInOpening"].filter(key => data[key] !== undefined).map(key => [key, data[key]])),
       status: data.status || "planned",
     };
   },
@@ -45,17 +49,10 @@ export const goalConverter = (uid) => ({
       ownerId: uid,
       name: goal.name.trim(),
       targetCents: toCents(goal.target),
-      currentCents: Math.min(toCents(goal.saved), toCents(goal.target)),
+      currentCents: toCents(goal.saved),
       currency: "usd",
-      status: goal.saved >= goal.target ? "completed" : "active",
-      ...(goal.contributions?.length
-        ? {
-            contributions: goal.contributions.map((item) => ({
-              amountCents: toCents(item.amount),
-              date: item.date,
-            })),
-          }
-        : {}),
+      status: goal.archived ? "archived" : goal.saved >= goal.target ? "completed" : "active",
+      contributions: (goal.contributions || []).map(item => ({ amountCents: toCents(item.amount), date: item.date })),
       updatedAt: serverTimestamp(),
     };
   },
@@ -65,6 +62,8 @@ export const goalConverter = (uid) => ({
       id: snapshot.id,
       name: data.name,
       target: toDollars(data.targetCents),
+      revision: data.revision,
+      archived: data.archived ?? data.status === "archived",
       saved: toDollars(data.currentCents),
       contributions: (data.contributions || []).map((item) => ({
         amount: toDollars(item.amountCents),
@@ -102,81 +101,8 @@ export function profileToFirestore(
   };
 }
 
-function nextOccurrence(date, frequency, interval) {
-  const next = new Date(date);
-  if (frequency === "weekly") next.setUTCDate(next.getUTCDate() + interval * 7);
-  if (frequency === "monthly") {
-    const day = next.getUTCDate();
-    next.setUTCDate(1);
-    next.setUTCMonth(next.getUTCMonth() + interval);
-    next.setUTCDate(
-      Math.min(
-        day,
-        new Date(
-          Date.UTC(next.getUTCFullYear(), next.getUTCMonth() + 1, 0),
-        ).getUTCDate(),
-      ),
-    );
-  }
-  if (frequency === "yearly") {
-    const month = next.getUTCMonth();
-    const day = next.getUTCDate();
-    next.setUTCDate(1);
-    next.setUTCFullYear(next.getUTCFullYear() + interval);
-    next.setUTCMonth(month);
-    next.setUTCDate(
-      Math.min(
-        day,
-        new Date(Date.UTC(next.getUTCFullYear(), month + 1, 0)).getUTCDate(),
-      ),
-    );
-  }
-  return next;
-}
-
-export function reminderOffsetMinutes(occurrence, reminders) {
-  const desired = new Date(
-    Date.UTC(
-      occurrence.getUTCFullYear(),
-      occurrence.getUTCMonth(),
-      occurrence.getUTCDate() - Number(reminders.leadDays || 0),
-      Number(reminders.hour ?? 9),
-    ),
-  );
-  const timezone = reminders.timezone || "UTC";
-  let instant = new Date(desired);
-  try {
-    const formatter = new Intl.DateTimeFormat("en-CA", {
-      timeZone: timezone,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      hourCycle: "h23",
-    });
-    for (let pass = 0; pass < 2; pass += 1) {
-      const parts = Object.fromEntries(
-        formatter
-          .formatToParts(instant)
-          .filter((part) => part.type !== "literal")
-          .map((part) => [part.type, Number(part.value)]),
-      );
-      const represented = Date.UTC(
-        parts.year,
-        parts.month - 1,
-        parts.day,
-        parts.hour,
-      );
-      instant = new Date(instant.getTime() + desired.getTime() - represented);
-    }
-  } catch {
-    instant = desired;
-  }
-  return Math.min(
-    43200,
-    Math.max(0, Math.round((occurrence.getTime() - instant.getTime()) / 60000)),
-  );
-}
+export { reminderOffsetMinutes } from "../../functions/src/domain/reminders.js";
+import { reminderOffsetMinutes } from "../../functions/src/domain/reminders.js";
 
 export function recurringRule(uid, event, reminders = {}) {
   if (!event.recurring?.frequency) return null;
@@ -188,6 +114,8 @@ export function recurringRule(uid, event, reminders = {}) {
     enabled: true,
     frequency: event.recurring.frequency,
     interval,
+    anchorDay: source.getUTCDate(),
+    anchorMonth: source.getUTCMonth(),
     nextRunAt: Timestamp.fromDate(next),
     endAt: event.recurring.endDate
       ? toTimestamp(event.recurring.endDate)

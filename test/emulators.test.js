@@ -36,6 +36,9 @@ test("emulated sign-in, owned writes, isolation, and App Check enforcement", { t
     assert.equal((await getDocFromServer(ref)).data().amountCents, 100);
     await assert.rejects(getDocFromServer(doc(bob.db, path)), { code: "permission-denied" });
     await assert.rejects(httpsCallable(alice.functions, "exportWorkspace")({}), { code: "functions/unauthenticated" });
+    for(const name of ['workspaceCommand','loadWorkspace','workspaceBackup','enableWorkspace']) {
+      await assert.rejects(httpsCallable(alice.functions,name)({}),{code:'functions/unauthenticated'});
+    }
     await deleteDoc(ref);
   } finally {
     await Promise.all(clients.map(async ({ app, db }) => {
