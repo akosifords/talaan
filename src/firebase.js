@@ -2,6 +2,7 @@ import { initializeApp } from "firebase/app";
 import {
   initializeAppCheck,
   ReCaptchaV3Provider,
+  ReCaptchaEnterpriseProvider,
 } from "firebase/app-check";
 import { connectAuthEmulator, getAuth } from "firebase/auth";
 import { connectFirestoreEmulator, getFirestore } from "firebase/firestore";
@@ -37,9 +38,9 @@ if (import.meta.env.DEV && import.meta.env.VITE_FIREBASE_APPCHECK_DEBUG === "tru
 export const appCheck =
   app && import.meta.env.VITE_FIREBASE_APPCHECK_SITE_KEY
     ? initializeAppCheck(app, {
-        provider: new ReCaptchaV3Provider(
-          import.meta.env.VITE_FIREBASE_APPCHECK_SITE_KEY,
-        ),
+        provider: import.meta.env.VITE_FIREBASE_APPCHECK_PROVIDER === "enterprise"
+          ? new ReCaptchaEnterpriseProvider(import.meta.env.VITE_FIREBASE_APPCHECK_SITE_KEY)
+          : new ReCaptchaV3Provider(import.meta.env.VITE_FIREBASE_APPCHECK_SITE_KEY),
         isTokenAutoRefreshEnabled: true,
       })
     : null;

@@ -1,10 +1,45 @@
 # Backend rollout and recovery
 
-Last updated: 2026-09-15. Local implementation checks passed; live staging verification remains pending. **No staging or production deployment has been performed.**
+Last updated: 2026-09-20. Local implementation checks passed. Staging Auth and Firestore are provisioned; Four workspace Functions are deployed; App Check is registered; test cohort and provider setup remain pending as recorded below. **No production deployment has been performed.**
+
+## Staging setup checkpoint — September 20, 2026
+
+- Project: `talaan-staging-fordan` (`391232524801`), display name **Talaan Staging**. This is a newly created, isolated project.
+- Web app: `1:391232524801:web:b240561e174775a5af6600`, display name **Talaan Staging Web**.
+- Firestore: `(default)`, Standard edition, native mode, `us-central1`. Existing project rules and indexes deployed successfully.
+- Authentication: Google sign-in enabled. Authorized domains are `localhost`, `talaan-staging-fordan.firebaseapp.com`, and `talaan-staging-fordan.web.app`. Anonymous and password providers remain disabled.
+- Deployment configuration: `firebase.staging.json`. Always pass `--project talaan-staging-fordan --config firebase.staging.json` explicitly.
+- Local frontend configuration: `.env.staging.local`; Functions rollout flags: `functions/.env.talaan-staging-fordan`. Both are ignored by Git. New workspace enablement is restricted to the project owner’s verified staging UID.
+- App Check terms were accepted after explicit user approval. The web app is registered with reCAPTCHA Enterprise, with a one-hour token TTL. Its score-based key is restricted to `talaan-staging-fordan.web.app` and `talaan-staging-fordan.firebaseapp.com`; domain verification is enabled, fixed test scores and challenges are disabled.
+- Billing was added by the project owner. The next deployment successfully passed the billing prerequisite. Full entry-point analysis also requires Stripe/Resend secrets, so the workspace-only staging package below is used while provider setup is pending.
+- Workspace Functions `enableWorkspace`, `loadWorkspace`, `workspaceCommand`, and `workspaceBackup` are ACTIVE in `us-central1`. The generated staging entry point limits each to two instances. Artifact Registry deployment images have a seven-day cleanup policy. Live unauthenticated POST checks against all four endpoints returned HTTP 401 / `UNAUTHENTICATED`; authenticated App Check verification remains pending.
+- The App Check site key and `VITE_FIREBASE_APPCHECK_PROVIDER=enterprise` are saved in ignored `.env.staging.local`. Approved test UIDs/recipient emails are still pending. No test messages were sent and no user records migrated.
+
+### Workspace-only staging deployment
+
+The full Functions entry point declares Stripe/Resend secrets before Firebase filters selected functions. Until those providers are configured, package the same workspace sources behind a separate entry point:
+
+```sh
+node scripts/prepare-staging-functions.mjs
+npm ci --prefix .firebase/staging-workspace-functions --ignore-scripts --no-audit --no-fund
+npx -y firebase-tools@latest deploy --only functions:workspaceCommand,functions:loadWorkspace,functions:workspaceBackup,functions:enableWorkspace --project talaan-staging-fordan --config .firebase/workspace-deploy.json --non-interactive
+```
+
+Generated files stay under ignored `.firebase/`. This package sets a staging maximum of two instances per function. It does not contain scheduler, account deletion, legacy backup, payment, or support endpoints. Never deploy this package with an unfiltered `--only functions` once other functions exist. Complete provider credentials and deploy the full source before claiming B8 complete.
+
+Staging Hosting is configured in `firebase.staging.json`. Build with `npm run build -- --mode staging`, then deploy Hosting using that configuration and the explicit staging project. The `X-Robots-Tag` header discourages indexing but does not make a staging website private.
+
+Run the current preflight with:
+
+```sh
+node --env-file=.env.staging.local scripts/staging-preflight.mjs
+```
+
+It currently reports the missing test cohort. This only validates configuration presence; the live acceptance checklist is still required.
 
 ## Release gates
 
-B1–B7 implementation is present in this checkout. B8 includes CI checks, a configuration preflight and this runbook. Live B8 verification remains blocked until an explicit separate Firebase staging project and approved test accounts/recipients are supplied. Do not call the release complete based on emulator results alone.
+B1–B7 implementation is present in this checkout. B8 includes CI checks, a configuration preflight and this runbook. Live B8 verification remains blocked until approved test accounts/recipients and provider credentials are configured and live acceptance checks pass. Do not call the release complete based on emulator results alone.
 
 Required external inputs:
 
@@ -109,3 +144,38 @@ Before staging release, configure log-based metrics/alerts in the target project
 - Callable latency/error rate, Functions quota, Firestore read/write costs and App Check rejection spikes.
 
 For rollback, disable `backendEnabled` for the affected cohort and hide new-account enablement. Keep the compatible v2 reader deployed. Pause scheduling for that cohort with the same flag. Do not downgrade the schema after writes or replay an old backup in place. Restore verified pages into a new generation, reconcile, then re-enable users. Alert routing and actual staging dashboards are not configured by this local checkout.
+
+### App Check verification status
+
+Registration is confirmed in Firebase Console. The staging client supports Enterprise while defaulting to v3 for existing configurations. Lint and the staging build passed. Protected workspace callables already enforce App Check. Firestore-wide enforcement remains in monitoring until a valid signed-in browser flow is verified. Registration alone does not prove successful token issuance or authenticated commands.
+
+Staging Hosting release completed at https://talaan-staging-fordan.web.app. Browser smoke check loaded the branded home page and sign-in action without captured startup warnings or errors. This does not replace valid App Check token and signed-in workspace verification.
+
+## Live workspace verification — September 21, 2026
+
+Google sign-in completed successfully for the project owner's staging account. Firebase Authentication confirms a verified Google identity. That account alone is now in the `enableWorkspace` UID allowlist. The staging frontend exposes activation, while the server rejects accounts outside the allowlist. Email recipients remain unconfigured; no messages or payments were sent.
+
+The following operations succeeded through the deployed browser UI and App Check-enforced workspace callables:
+
+- Initialize the empty workspace using `enableWorkspace`; the migration prompt disappeared and the connected profile loaded.
+- Create `STAGING TEST — savings verification` with a $100 target and $150 opening balance. The over-target balance remained intact.
+- Record a $25 contribution. The goal became $175 and exactly one completed $25 savings entry appeared in Schedule.
+- Reload the browser. The $175 balance and one contribution row persisted.
+- Reopen the contribution as Planned. The goal returned to $150 and the completed contribution history cleared.
+
+The labeled goal and one planned test event are retained in staging for inspection. No production data was touched. Existing captures include earlier transient Firestore listen warnings; they did not prevent the later successful activation/save/reload flow.
+
+Still pending: second-account isolation and two-device conflict checks; live backup/restore and deletion; scheduler/reminder deployment and controlled delivery; Stripe/support provider configuration; monitoring alerts; and a separate production release decision. Firestore-wide App Check enforcement remains in monitoring. Successful protected callable execution verifies that valid Auth/App Check can pass, but does not complete the full B8 acceptance matrix.
+
+## Live backup verification — September 21, 2026
+
+Scope: staging owner's existing test workspace in `talaan-staging-fordan`; no production changes.
+
+- The deployed UI completed two exports and displayed “Your backup is ready.” Each completed server export contains three records across three pages.
+- The in-app browser did not expose a downloadable file/event. A read-only authenticated Firestore retrieval reconstructed the latest completed export, preserving its manifest and page hashes. The application validator accepted it. Browser file delivery remains unverified.
+- Recovery copy saved privately at `.firebase/verification/staging-before-restore.json` (ignored by Git, mode 0600). A separate copy with an altered page hash was rejected by the restore UI before activation.
+- Reloading immediately after the first restore click left the original generation active and no server restore job or lock. Retrying the same file completed successfully into a new generation. This demonstrates recovery from interruption before job creation, not mid-upload recovery.
+- The completed restore job is `ready`, all three pages were accepted, and the workspace lock cleared. Read-only comparisons confirmed all three restored records equal the original generation's records. Original records remain retained.
+- The live overview shows the expected labeled test goal and planned contribution after restore.
+
+The existing emulator test `paged backup handles large workspaces, resumes restore, detects corruption and preserves receipts after cutover` was selected for a fresh run, but emulator startup failed because no usable Java runtime is available. Prior emulator evidence is not a fresh pass. Live testing above used only three records; the greater-than-240-record and mid-upload interruption gates remain open, as does browser download delivery. No account deletion, provider delivery, or production action was performed.

@@ -1,6 +1,6 @@
 # Backend implementation for the desktop redesign
 
-Status: B1–B7 local implementation is present and local verification passed on September 15, 2026. Live acceptance gates remain part of B8. B8 release tooling is present; live staging and production rollout are not complete. No deployment or production migration has been performed.
+Status: B1–B7 local implementation is present and local verification passed on September 15, 2026. Live acceptance gates remain part of B8. B8 release tooling is present; live staging and production rollout are not complete. Staging Auth and Firestore were provisioned on September 20, 2026; Four workspace Functions are deployed and App Check is registered; test cohort verification and provider-dependent services remain pending. No production deployment or migration has been performed.
 
 Implementation and rollout details: [BACKEND_RELEASE_RUNBOOK.md](BACKEND_RELEASE_RUNBOOK.md).
 Prepared: September 14, 2026.
@@ -202,3 +202,7 @@ Local implementation can begin without production secrets. Before staging, resol
 - [Firestore best practices](https://firebase.google.com/docs/firestore/best-practices): bounded queries and cursor-based pagination inform history loading.
 
 These references support platform behavior. The schema, write boundaries, phases, and product assumptions above are recommendations based on the repository audit, not Firebase requirements.
+
+## Live staging checkpoint — September 21, 2026
+
+Owner-account Google sign-in, App Check-protected workspace initialization, over-target goal creation, atomic contribution recording, browser reload persistence, and completed-to-planned contribution reversal passed against staging. Test records are explicitly labeled and retained. B8 remains incomplete: multi-device/isolation, recovery/deletion, provider delivery, monitoring and production gates remain open. See the release runbook for exact evidence.
